@@ -1,4 +1,4 @@
-# kahoot-hack
+# KahootJ
 
 Reverse engineering kahoot.it
 
