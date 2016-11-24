@@ -1,14 +1,10 @@
 package me.incognitojam.kahootj;
 
-import org.apache.commons.codec.binary.Base64;
-import org.apache.http.Header;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.BasicResponseHandler;
-import org.apache.http.impl.client.CloseableHttpClient;
+import okhttp3.Headers;
+import okhttp3.Response;
 import org.json.JSONObject;
 
-import java.io.IOException;
+import java.util.Base64;
 
 public class SessionUtils {
 
@@ -54,19 +50,8 @@ public class SessionUtils {
      * @return true if game PIN is valid, false if game PIN is invalid or an exception was thrown.
      */
     public static boolean checkPINValidity(int gamepin) {
-        CloseableHttpClient cli = HTTPUtils.getClient();
-        HttpGet req = HTTPUtils.GET("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
-        try {
-            CloseableHttpResponse res = cli.execute(req);
-
-            int status = res.getStatusLine().getStatusCode();
-
-            return (status == 200); // 200 = OK, if game pin is invalid, a 404 Not Found will be returned
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return false;
+        Response response = HTTPUtils.GET("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
+        return response != null && response.code() == 200;
     }
 
     /**
@@ -76,7 +61,7 @@ public class SessionUtils {
      * @return The decoded, usable session token
      */
     public static String decodeSessionToken(String encoded) {
-        byte[] rawToken = Base64.decodeBase64(encoded);
+        byte[] rawToken = Base64.getDecoder().decode(encoded);
         byte[] challengeBytes = Integer.toString(challengeSolution).getBytes();
 
         for (int i = 0; i < rawToken.length; i++) {
@@ -95,34 +80,35 @@ public class SessionUtils {
      * @return The encoded session token
      */
     public static String getSessionToken(int gamepin) {
-        CloseableHttpClient cli = HTTPUtils.getClient();
-        HttpGet req = HTTPUtils.GET("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
+        Response response = HTTPUtils.GET("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
+        if (response == null) {
+            System.out.println("Response is null");
+            return null;
+        }
+        Headers headers = response.headers();
         try {
-            CloseableHttpResponse res = cli.execute(req);
-            Header[] headers = res.getAllHeaders();
-            for (Header header : headers) {
-                if (header.getName().equalsIgnoreCase("x-kahoot-session-token")) {
-                    if (Kahoot.isDebug())
-                        System.out.println("SESSION = " + header.getValue());
+            for (String key : headers.names()) {
+                if (key.equalsIgnoreCase("x-kahoot-session-token")) {
+                    String responseString = response.body().string();
 
-                    BasicResponseHandler handler = new BasicResponseHandler();
-                    String response = handler.handleResponse(res);
+                    if (Kahoot.isDebug()) {
+                        System.out.println("SESSION = " + headers.get(key));
+                        System.out.println("SESSION REQUEST RESPONSE BODY = " + responseString);
+                    }
 
-                    if (Kahoot.isDebug())
-                        System.out.println("SESSION REQUEST RESPONSE BODY = " + response);
-                    wasLastGameTeam = response.toLowerCase().contains("team");
-
-                    if (response.toLowerCase().contains("challenge")) {
-                        JSONObject j = new JSONObject(response);
-                        String challenge = j.getString("challenge");
+                    wasLastGameTeam = responseString.contains("team");
+                    if (responseString.toLowerCase().contains("challenge")) {
+                        JSONObject jsonObject = new JSONObject(response);
+                        String challenge = jsonObject.getString("challenge");
                         challengeSolution = solveChallenge(challenge);
                     }
-                    return header.getValue();
+                    return headers.get(key);
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
+        System.out.println("getSessionToken() null");
         return null;
     }
 

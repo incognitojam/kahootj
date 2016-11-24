@@ -1,36 +1,50 @@
 package me.incognitojam.kahootj;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.ByteArrayEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
+import okhttp3.*;
+import okhttp3.Request.Builder;
+
+import java.io.IOException;
 
 public class HTTPUtils {
 
+    private static final OkHttpClient client = new OkHttpClient();
+
     public static final String USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:49.0) Gecko/20100101 Firefox/49.0";
-    public static final String CONTENT_TYPE = "application/json;charset=UTF-8";
+    public static final MediaType JSON = MediaType.parse("application/json; charset=UTF-8");
 
-    public static CloseableHttpClient getClient() {
-        return HttpClients.createDefault();
+    public static Response GET(String url) {
+        Request request = new Request.Builder()
+                .addHeader("User-Agent", USER_AGENT)
+                .url(url)
+                .build();
+        try {
+            return client.newCall(request).execute();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
-    public static HttpGet GET(String url) {
-        HttpGet req = new HttpGet(url);
-        req.setHeader("User-Agent", USER_AGENT);
-        return req;
+    public static Response POST(String url, String rawData) {
+        RequestBody body = RequestBody.create(JSON, rawData);
+        Request request = new Builder()
+                .url(url)
+                .addHeader("User-Agent", USER_AGENT)
+                .addHeader("Origin", "https://kahoot.it")
+                .addHeader("Accept", "application/json, text/plain, */*")
+                .post(body)
+                .build();
+
+        try {
+            return client.newCall(request).execute();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
-    public static HttpPost POST(String url, String rawData) {
-        HttpPost req = new HttpPost(url);
-        HttpEntity e = new ByteArrayEntity(rawData.getBytes());
-        req.setHeader("User-Agent", USER_AGENT);
-        req.setHeader("Content-Type", CONTENT_TYPE);
-        req.setHeader("Origin", "https://kahoot.it");
-        req.setHeader("Accept", "application/json, text/plain, */*");
-        req.setEntity(e);
-        return req;
+    public static OkHttpClient getClient() {
+        return client;
     }
 
 }
