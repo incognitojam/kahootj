@@ -5,40 +5,76 @@ import okhttp3.Response;
 import org.json.JSONObject;
 
 import java.util.Base64;
+import java.util.regex.Pattern;
 
 public class SessionUtils {
 
     private static boolean wasLastGameTeam = false;
 
-    private static int challengeSolution = 0; // last challenge solution
+    private static long challengeSolution = 0; // last challenge solution
 
     static boolean getLastGameTeam() {
         return wasLastGameTeam;
     }
 
-    public static int solveChallenge(String challenge) {
-        challenge = challenge.replace("  ", " ").replace(")", "").replace("(", "");
-        String[] challengeArray = challenge.split(" ");
+    private static long solveChallenge(String challenge) {
+        challenge = challenge.replace("  ", " ");
+        String[] challengeArray;
 
-        int num1 = Integer.parseInt(challengeArray[0]);
-        int num2 = Integer.parseInt(challengeArray[2]);
-        int num3 = Integer.parseInt(challengeArray[4]);
+        long solution;
 
-        int solution;
+        // Numbers occur on each even index of the array such as 0, 2, 4, and so on
+        // Operators occur on each odd index of the array such as 1, 3, 5, and so on
 
-        if (Kahoot.isDebug()) {
+        if (Pattern.matches("^([0-9]*) \\* \\(([0-9]*) \\+ ([0-9]*)\\)$", challenge)) {
+            challenge = challenge.replace("(", "").replace(")", "");
+            challengeArray = challenge.split(" ");
+            long num1 = Integer.parseInt(challengeArray[0]);
+            long num2 = Integer.parseInt(challengeArray[2]);
+            long num3 = Integer.parseInt(challengeArray[4]);
+
+            solution = num1 * (num2 + num3);
+        } else if (Pattern.matches("^\\(([0-9]*) \\+ ([0-9]*)\\) \\* ([0-9]*)$", challenge)) {
+            challenge = challenge.replace("(", "").replace(")", "");
+            challengeArray = challenge.split(" ");
+            long num1 = Integer.parseInt(challengeArray[0]);
+            long num2 = Integer.parseInt(challengeArray[2]);
+            long num3 = Integer.parseInt(challengeArray[4]);
+
+            solution = (num1 + num2) * num3;
+        } else if (Pattern.matches("^([0-9]*) - \\(([0-9]*) \\* ([0-9]*)\\)$", challenge)) {
+            challenge = challenge.replace("(", "").replace(")", "");
+            challengeArray = challenge.split(" ");
+            long num1 = Integer.parseInt(challengeArray[0]);
+            long num2 = Integer.parseInt(challengeArray[2]);
+            long num3 = Integer.parseInt(challengeArray[4]);
+
+            solution = num1 - (num2 * num3);
+        } else if (Pattern.matches("^\\(([0-9]*) \\+ ([0-9]*)\\) \\* \\(([0-9]*) \\* ([0-9]*)\\)$", challenge)) {
+            challenge = challenge.replace("(", "").replace(")", "");
+            challengeArray = challenge.split(" ");
+            long num1 = Integer.parseInt(challengeArray[0]);
+            long num2 = Integer.parseInt(challengeArray[2]);
+            long num3 = Integer.parseInt(challengeArray[4]);
+            long num4 = Integer.parseInt(challengeArray[6]);
+
+            solution = (num1 + num2) * (num3 * num4);
+        } else {
+            challenge = challenge.replace("(", "").replace(")", "");
+            challengeArray = challenge.split(" ");
+            solution = -1;
+            System.out.println("An unknown challenge was returned. Please report this to the developers.");
             for (int i = 0; i < challengeArray.length; i++) {
                 System.out.println("challengeArray[" + i + "] = '" + challengeArray[i] + "'");
             }
         }
 
-        if (challengeArray[1].equals("*"))
-            solution = num1 * (num2 + num3);
-        else
-            solution = (num1 + num2) * num3;
-
-        if (Kahoot.isDebug())
+        if (Kahoot.isDebug()) {
+            for (int i = 0; i < challengeArray.length; i++) {
+                System.out.println("challengeArray[" + i + "] = '" + challengeArray[i] + "'");
+            }
             System.out.println("CHALLENGE SOLUTION = " + solution);
+        }
 
         return solution;
     }
@@ -62,7 +98,7 @@ public class SessionUtils {
      */
     public static String decodeSessionToken(String encoded) {
         byte[] rawToken = Base64.getDecoder().decode(encoded);
-        byte[] challengeBytes = Integer.toString(challengeSolution).getBytes();
+        byte[] challengeBytes = Long.toString(challengeSolution).getBytes();
 
         for (int i = 0; i < rawToken.length; i++) {
             rawToken[i] ^= challengeBytes[i % challengeBytes.length];
@@ -98,7 +134,7 @@ public class SessionUtils {
 
                     wasLastGameTeam = responseString.contains("team");
                     if (responseString.toLowerCase().contains("challenge")) {
-                        JSONObject jsonObject = new JSONObject(response);
+                        JSONObject jsonObject = new JSONObject(responseString);
                         String challenge = jsonObject.getString("challenge");
                         challengeSolution = solveChallenge(challenge);
                     }

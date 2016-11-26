@@ -26,15 +26,34 @@ public class HTTPUtils {
     }
 
     public static Response POST(String url, String rawData) {
+        return POST(url, rawData, new Headers.Builder().build());
+    }
+
+    public static Response POST(String url, String rawData, Headers headers) {
+        System.out.println(rawData);
         RequestBody body = RequestBody.create(JSON, rawData);
         Request request = new Builder()
                 .url(url)
+                .headers(headers)
+                .addHeader("User-Agent", USER_AGENT)
+                .addHeader("Origin", "https://kahoot.it")
+                .addHeader("Accept", "application/json, text/plain, */*").post(body).build();
+        try {
+            return client.newCall(request).execute();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static Response POST(String url, Headers headers) {
+        Request request = new Builder()
+                .url(url)
+                .headers(headers)
                 .addHeader("User-Agent", USER_AGENT)
                 .addHeader("Origin", "https://kahoot.it")
                 .addHeader("Accept", "application/json, text/plain, */*")
-                .post(body)
-                .build();
-
+                .post(RequestBody.create(null, new byte[0])).build();
         try {
             return client.newCall(request).execute();
         } catch (IOException e) {
