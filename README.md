@@ -2,9 +2,9 @@
 
 Reverse engineering kahoot.it
 
-This has similar functionality to the code here https://github.com/Arccotangent/kahoot-hack but it is being rewritten as a library so that you can develop custom Kahoot! apps and clients more easily.
+This has similar functionality to the code [here (kahoot-hack)](https://github.com/Arccotangent/kahoot-hack) but it is being rewritten as a library so that you can develop custom Kahoot! apps and clients more easily.
 
-Working as of November 16, 2016
+Working as of November 26th, 2016
 
 ## Building
 
@@ -26,4 +26,4 @@ You are welcome to contribute by submitting a pull request or opening an issue o
 
 ## Credits
 
-Thanks to Arccotangent for the original code! I just tidied it up.
+Thanks to Arccotangent for the original code! I just tidied it up and replaced some libraries with multiplatform ones.
