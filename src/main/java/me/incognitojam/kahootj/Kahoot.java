@@ -1,5 +1,7 @@
 package me.incognitojam.kahootj;
 
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.Headers.Builder;
 import okhttp3.Response;
@@ -200,174 +202,245 @@ public class Kahoot extends Thread {
             System.out.println("gameid = " + gamePin);
         }
 
-        {
-            JSONObject advice = new JSONObject();
-            advice.put("timeout", 60000);
-            advice.put("interval", 0);
+        initStageOne();
+    }
 
-            JSONObject handshakeData = new JSONObject();
-            handshakeData.put("advice", advice.toString());
-            handshakeData.put("version", "1.0");
-            handshakeData.put("minimumVersion", "1.0");
-            handshakeData.put("channel", "/meta/handshake");
+    private void initStageOne() {
+        JSONObject advice = new JSONObject();
+        advice.put("timeout", 60000);
+        advice.put("interval", 0);
 
-            JSONArray supportedConnTypes = new JSONArray();
-            //supportedConnTypes.put("websocket");
-            supportedConnTypes.put("long-polling");
+        JSONObject handshakeData = new JSONObject();
+        handshakeData.put("advice", advice.toString());
+        handshakeData.put("version", "1.0");
+        handshakeData.put("minimumVersion", "1.0");
+        handshakeData.put("channel", "/meta/handshake");
 
-            handshakeData.put("supportedConnectionTypes", supportedConnTypes.toString());
+        JSONArray supportedConnTypes = new JSONArray();
+        //supportedConnTypes.put("websocket");
+        supportedConnTypes.put("long-polling");
 
-            Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/handshake", handshakeData.toString());
-            try {
-                String responseString = response.body().string();
-                Headers headers = response.headers();
-                for (String headerKey : headers.names()) {
-                    if (headerKey.equalsIgnoreCase("Set-Cookie")) {
-                        bayeuxCookie = headers.get(headerKey);
-                        int sc = bayeuxCookie.lastIndexOf(';');
-                        bayeuxCookie = bayeuxCookie.substring(0, sc);
+        handshakeData.put("supportedConnectionTypes", supportedConnTypes.toString());
+
+        HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/handshake", handshakeData.toString(), new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String responseString = response.body().string();
+                    Headers headers = response.headers();
+                    for (String headerKey : headers.names()) {
+                        if (headerKey.equalsIgnoreCase("Set-Cookie")) {
+                            bayeuxCookie = headers.get(headerKey);
+                            int sc = bayeuxCookie.lastIndexOf(';');
+                            bayeuxCookie = bayeuxCookie.substring(0, sc);
+                        }
                     }
+                    if (Kahoot.isDebug())
+                        System.out.println("1 = " + responseString);
+
+                    JSONArray responseJson = new JSONArray(responseString);
+                    JSONObject responseObject = responseJson.getJSONObject(0);
+                    clientId = responseObject.getString("clientId");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
                 }
-                if (Kahoot.isDebug())
-                    System.out.println("1 = " + responseString);
 
-                JSONArray responseJson = new JSONArray(responseString);
-                JSONObject responseObject = responseJson.getJSONObject(0);
-                clientId = responseObject.getString("clientId");
-            } catch (IOException e) {
-                e.printStackTrace();
+                initStageTwo();
             }
-        }
+        });
+    }
 
+    private void initStageTwo() {
         // BEGIN STAGE 2
-        {
-            JSONObject content = new JSONObject();
-            content.put("channel", "/meta/unsubscribe");
-            content.put("clientId", clientId);
-            content.put("subscription", "/service/controller");
+        JSONObject content = new JSONObject();
+        content.put("channel", "/meta/unsubscribe");
+        content.put("clientId", clientId);
+        content.put("subscription", "/service/controller");
 
-            Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
-
-            Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, content.toString(), headers);
-            try {
-                String responseString = response.body().string();
-                if (Kahoot.isDebug())
-                    System.out.println("stage 2 = " + response);
-                JSONArray responseArray = new JSONArray(responseString);
-                JSONObject responseObject = responseArray.getJSONObject(0);
-                boolean success = responseObject.getBoolean("successful");
-                if (!success) {
-                    System.out.println("[STAGE 2] Error connecting to server! Full server response below.");
-                    System.out.println(responseString);
-                }
-            } catch (IOException e) {
+        Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
+        HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, content.toString(), headers, new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
-        }
 
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String responseString = response.body().string();
+                    if (Kahoot.isDebug())
+                        System.out.println("stage 2 = " + response);
+
+                    JSONArray responseArray = new JSONArray(responseString);
+                    JSONObject responseObject = responseArray.getJSONObject(0);
+                    boolean success = responseObject.getBoolean("successful");
+                    if (!success) {
+                        System.out.println("[STAGE 2] Error connecting to server! Full server response below.");
+                        System.out.println(responseString);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
+
+                initStageThree();
+            }
+        });
+    }
+
+    private void initStageThree() {
         // BEGIN STAGE 3
-        {
-            JSONObject c2 = new JSONObject();
-            c2.put("channel", "/meta/connect");
-            c2.put("clientId", clientId);
-            c2.put("connectionType", "long-polling");
+        JSONObject data = new JSONObject();
+        data.put("channel", "/meta/connect");
+        data.put("clientId", clientId);
+        data.put("connectionType", "long-polling");
 
-            Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
-
-            Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/connect", c2.toString(), headers);
-            try {
-                String responseString = response.body().string();
-                if (Kahoot.isDebug())
-                    System.out.println("3 = " + responseString);
-                JSONArray r2 = new JSONArray(responseString);
-                JSONObject r = r2.getJSONObject(0);
-                boolean success = r.getBoolean("successful");
-                if (!success) {
-                    System.out.println("[STAGE 3] Error connecting to server! Full server response below.");
-                    System.out.println(responseString);
-                }
-            } catch (IOException e) {
+        Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
+        HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/connect", data.toString(), headers, new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
-        }
 
-        // BEGIN STAGE 4
-        {
-            JSONObject c6 = new JSONObject();
-            c6.put("channel", "/meta/subscribe");
-            c6.put("clientId", clientId);
-            //c6.put("connectionType", "long-polling");
-            c6.put("subscription", "/service/status");
-
-            Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
-            Response respose = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, c6.toString(), headers);
-            try {
-                String responseString = respose.body().string();
-                if (Kahoot.isDebug())
-                    System.out.println("4-1 = " + responseString);
-                JSONArray r2 = new JSONArray(responseString);
-                JSONObject r = r2.getJSONObject(0);
-                boolean success = r.getBoolean("successful");
-                if (!success) {
-                    System.out.println("[STAGE 4/SERVICE_STATUS] Error connecting to server! Full server response below.");
-                    System.out.println(responseString);
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String responseString = response.body().string();
+                    if (Kahoot.isDebug())
+                        System.out.println("3 = " + responseString);
+                    JSONArray r2 = new JSONArray(responseString);
+                    JSONObject r = r2.getJSONObject(0);
+                    boolean success = r.getBoolean("successful");
+                    if (!success) {
+                        System.out.println("[STAGE 3] Error connecting to server! Full server response below.");
+                        System.out.println(responseString);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
 
+                initStageFourA();
+            }
+        });
+
+    }
+
+    private void initStageFourA() {
+        // STAGE FOUR - SERVICE STATUS
+        JSONObject c6 = new JSONObject();
+        c6.put("channel", "/meta/subscribe");
+        c6.put("clientId", clientId);
+        //c6.put("connectionType", "long-polling");
+        c6.put("subscription", "/service/status");
+
+        Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
+        HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, c6.toString(), headers, new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String responseString = response.body().string();
+                    if (Kahoot.isDebug())
+                        System.out.println("4-1 = " + responseString);
+                    JSONArray r2 = new JSONArray(responseString);
+                    JSONObject r = r2.getJSONObject(0);
+                    boolean success = r.getBoolean("successful");
+                    if (!success) {
+                        System.out.println("[STAGE 4/SERVICE_STATUS] Error connecting to server! Full server response below.");
+                        System.out.println(responseString);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
+
+                initStageFourB();
+            }
+        });
+    }
+
+    private void initStageFourB() {
         // SERVICE PLAYER
-        {
-            JSONObject c7 = new JSONObject();
-            c7.put("channel", "/meta/subscribe");
-            c7.put("clientId", clientId);
-            //c7.put("connectionType", "long-polling");
-            c7.put("subscription", "/service/player");
+        JSONObject c7 = new JSONObject();
+        c7.put("channel", "/meta/subscribe");
+        c7.put("clientId", clientId);
+        //c7.put("connectionType", "long-polling");
+        c7.put("subscription", "/service/player");
 
-            Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
-            Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, c7.toString(), headers);
-            try {
-                String responseString = response.body().string();
-                if (Kahoot.isDebug())
-                    System.out.println("4-2 = " + responseString);
-                JSONArray r2 = new JSONArray(responseString);
-                JSONObject r = r2.getJSONObject(0);
-                boolean success = r.getBoolean("successful");
-                if (!success) {
-                    System.out.println("[STAGE 4/SERVICE_PLAYER] Error connecting to server! Full server response below.");
-                    System.out.println(responseString);
-                }
-            } catch (IOException e) {
+        Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
+        HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, c7.toString(), headers, new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
-        }
 
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String responseString = response.body().string();
+                    if (Kahoot.isDebug())
+                        System.out.println("4-2 = " + responseString);
+                    JSONArray r2 = new JSONArray(responseString);
+                    JSONObject r = r2.getJSONObject(0);
+                    boolean success = r.getBoolean("successful");
+                    if (!success) {
+                        System.out.println("[STAGE 4/SERVICE_PLAYER] Error connecting to server! Full server response below.");
+                        System.out.println(responseString);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
+
+                initStageFourC();
+            }
+        });
+    }
+
+    private void initStageFourC() {
         // SERVICE CONTROLLER
-        {
-            JSONObject c8 = new JSONObject();
-            c8.put("channel", "/meta/subscribe");
-            c8.put("clientId", clientId);
-            //c7.put("connectionType", "long-polling");
-            c8.put("subscription", "/service/controller");
+        JSONObject c8 = new JSONObject();
+        c8.put("channel", "/meta/subscribe");
+        c8.put("clientId", clientId);
+        //c7.put("connectionType", "long-polling");
+        c8.put("subscription", "/service/controller");
 
-            Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
-            Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, c8.toString(), headers);
-            try {
-                String responseString = response.body().string();
-                if (Kahoot.isDebug())
-                    System.out.println("4-3 = " + responseString);
-                JSONArray r2 = new JSONArray(responseString);
-                JSONObject r = r2.getJSONObject(0);
-                boolean success = r.getBoolean("successful");
-                if (!success) {
-                    System.out.println("[STAGE 4/SERVICE_CONTROLLER] Error connecting to server! Full server response below.");
-                    System.out.println(responseString);
-                }
-            } catch (IOException e) {
+        Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
+        HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, c8.toString(), headers, new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
             }
-        }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String responseString = response.body().string();
+                    if (Kahoot.isDebug())
+                        System.out.println("4-3 = " + responseString);
+                    JSONArray r2 = new JSONArray(responseString);
+                    JSONObject r = r2.getJSONObject(0);
+                    boolean success = r.getBoolean("successful");
+                    if (!success) {
+                        System.out.println("[STAGE 4/SERVICE_CONTROLLER] Error connecting to server! Full server response below.");
+                        System.out.println(responseString);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     /**
@@ -392,49 +465,68 @@ public class Kahoot extends Thread {
             //String d = "{\"clientId\":\"" + client_id + "\",\"data\":{\"gameid\":" + gameid + ",\"host\":\"kahoot.it\",\"name\":\"" + uname + "\",\"type\":\"login\"},\"channel\":\"/service/controller\"}";
 
             Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
-            Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, c.toString(), headers);
-            try {
-                String responseString = response.body().string();
-                if (Kahoot.isDebug())
-                    System.out.println("L1 = " + responseString);
-                JSONArray r2 = new JSONArray(responseString);
-                JSONObject r = r2.getJSONObject(r2.length() - 1);
-                boolean success = r.getBoolean("successful");
-                if (!success) {
-                    System.out.println("[LOGIN/BEGIN] Error connecting to server! Full server response below.");
-                    System.out.println(responseString);
+            HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, c.toString(), headers, new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    e.printStackTrace();
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
 
-        //"advice":{"timeout":0, "interval":0}
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    try {
+                        String responseString = response.body().string();
+                        if (Kahoot.isDebug())
+                            System.out.println("L1 = " + responseString);
+                        JSONArray r2 = new JSONArray(responseString);
+                        JSONObject r = r2.getJSONObject(r2.length() - 1);
+                        boolean success = r.getBoolean("successful");
+                        if (!success) {
+                            System.out.println("[LOGIN/BEGIN] Error connecting to server! Full server response below.");
+                            System.out.println(responseString);
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        return;
+                    }
 
-        {
-            String headersData = "{\"clientId\":\"" + clientId + "\",\"channel\":\"/meta/connect\",\"connectionType\":\"long-polling\"}";
-            Headers headers = new Builder()
-                    .add("clientId", clientId)
-                    .add("channel", "/meta/connect")
-                    .add("connectionType", "long-polling")
-                    .add("Cookie", bayeuxCookie)
-                    .build();
+                    {
+                        String headersData = "{\"clientId\":\"" + clientId + "\",\"channel\":\"/meta/connect\",\"connectionType\":\"long-polling\"}";
+                        Headers headers = new Builder()
+                                .add("clientId", clientId)
+                                .add("channel", "/meta/connect")
+                                .add("connectionType", "long-polling")
+                                .add("Cookie", bayeuxCookie)
+                                .build();
 
-            Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/connect", headersData, headers);
-            try {
-                String responseString = response.body().string();
-                if (Kahoot.isDebug())
-                    System.out.println("L2 = " + responseString);
-                JSONArray r2 = new JSONArray(responseString);
-                JSONObject r = r2.getJSONObject(r2.length() - 1);
-                boolean success = r.getBoolean("successful");
-                if (!success) {
-                    System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
-                    System.out.println(responseString);
+                        HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/connect", headersData, headers, new Callback() {
+                            @Override
+                            public void onFailure(Call call, IOException e) {
+                                e.printStackTrace();
+                            }
+
+                            @Override
+                            public void onResponse(Call call, Response response) throws IOException {
+                                try {
+                                    String responseString = response.body().string();
+                                    if (Kahoot.isDebug())
+                                        System.out.println("L2 = " + responseString);
+                                    JSONArray r2 = new JSONArray(responseString);
+                                    JSONObject r = r2.getJSONObject(r2.length() - 1);
+                                    boolean success = r.getBoolean("successful");
+                                    if (!success) {
+                                        System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
+                                        System.out.println(responseString);
+                                    }
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        });
+
+                    }
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            });
+
         }
 
         active = true;
@@ -450,21 +542,31 @@ public class Kahoot extends Thread {
         c.put("clientId", clientId);
 
         Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
-        Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/disconnect", c.toString(), headers);
-        try {
-            String responseString = response.body().string();
-            if (Kahoot.isDebug())
-                System.out.println("D = " + responseString);
-            JSONArray responseArray = new JSONArray(responseString);
-            JSONObject responseObject = responseArray.getJSONObject(0);
-            boolean success = responseObject.has("successful") && responseObject.getBoolean("successful");
-            if (!success) {
-                System.out.println("[DISCONNECT] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+        HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/disconnect", c.toString(), headers, new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String responseString = response.body().string();
+                    if (Kahoot.isDebug())
+                        System.out.println("D = " + responseString);
+                    JSONArray responseArray = new JSONArray(responseString);
+                    JSONObject responseObject = responseArray.getJSONObject(0);
+                    boolean success = responseObject.has("successful") && responseObject.getBoolean("successful");
+                    if (!success) {
+                        System.out.println("[DISCONNECT] Error connecting to server! Full server response below.");
+                        System.out.println(responseString);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
 
         active = false;
     }
@@ -509,22 +611,32 @@ public class Kahoot extends Thread {
 
         //System.out.println(base.toString());
         Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
-        Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, base.toString(), headers);
-        try {
-            String responseString = response.body().string();
-            if (Kahoot.isDebug())
-                System.out.println("AQ = " + responseString);
-            JSONArray r2 = new JSONArray(responseString);
-            JSONObject r = r2.getJSONObject(r2.length() - 1);
-            boolean success = r.getBoolean("successful");
-            if (!success) {
-                System.out.println("[QUESTION/ANSWER] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+        HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken, base.toString(), headers, new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
             }
-            questionAnswered = true;
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String responseString = response.body().string();
+                    if (Kahoot.isDebug())
+                        System.out.println("AQ = " + responseString);
+                    JSONArray r2 = new JSONArray(responseString);
+                    JSONObject r = r2.getJSONObject(r2.length() - 1);
+                    boolean success = r.getBoolean("successful");
+                    if (!success) {
+                        System.out.println("[QUESTION/ANSWER] Error connecting to server! Full server response below.");
+                        System.out.println(responseString);
+                    }
+                    questionAnswered = true;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
     }
 
     /**
@@ -544,49 +656,58 @@ public class Kahoot extends Thread {
             Headers headers = new Headers.Builder()
                     .add("Cookie", bayeuxCookie)
                     .build();
-            Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/connect", c2.toString(), headers);
-            try {
-                String responseString = response.body().string();
-                if (Kahoot.isDebug())
-                    System.out.println("R = " + responseString);
-                JSONArray r2 = new JSONArray(responseString);
-                JSONObject r = r2.getJSONObject(r2.length() - 1);
-                boolean success = r.getBoolean("successful");
-                if (!success) {
-                    System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
-                    System.out.println(responseString);
+            HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/connect", c2.toString(), headers, new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    e.printStackTrace();
                 }
 
-                if (responseString.contains("answerMap") && !responseString.contains("timeLeft")) {
-                    JSONObject answerMap = r2.getJSONObject(0);
-                    JSONObject data = answerMap.getJSONObject("data");
-                    JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
-                    JSONObject answers = content.getJSONObject("answerMap");
-                    if (answers.length() == 2) {
-                        optionTwoValid = false;
-                        optionThreeValid = false;
-                    }
-                    if (answers.length() == 3) {
-                        optionTwoValid = true;
-                        optionThreeValid = false;
-                    }
-                    if (answers.length() == 4) {
-                        optionTwoValid = true;
-                        optionThreeValid = true;
-                    }
-                    Random random = new Random();
-                    int answer = random.nextInt(answers.length());
-                    int ranswer = answers.getInt(Integer.toString(answer));
-                    this.answerQuestion(ranswer);
-                    previousAnswer = answer;
-                } else if (responseString.contains("quizId")) {
-                    active = false;
-                }
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    try {
+                        String responseString = response.body().string();
+                        if (Kahoot.isDebug())
+                            System.out.println("R = " + responseString);
+                        JSONArray r2 = new JSONArray(responseString);
+                        JSONObject r = r2.getJSONObject(r2.length() - 1);
+                        boolean success = r.getBoolean("successful");
+                        if (!success) {
+                            System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
+                            System.out.println(responseString);
+                        }
 
-                Thread.sleep(new Random().nextInt(5000));
-            } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
-            }
+                        if (responseString.contains("answerMap") && !responseString.contains("timeLeft")) {
+                            JSONObject answerMap = r2.getJSONObject(0);
+                            JSONObject data = answerMap.getJSONObject("data");
+                            JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
+                            JSONObject answers = content.getJSONObject("answerMap");
+                            if (answers.length() == 2) {
+                                optionTwoValid = false;
+                                optionThreeValid = false;
+                            }
+                            if (answers.length() == 3) {
+                                optionTwoValid = true;
+                                optionThreeValid = false;
+                            }
+                            if (answers.length() == 4) {
+                                optionTwoValid = true;
+                                optionThreeValid = true;
+                            }
+                            Random random = new Random();
+                            int answer = random.nextInt(answers.length());
+                            int ranswer = answers.getInt(Integer.toString(answer));
+                            Kahoot.this.answerQuestion(ranswer);
+                            previousAnswer = answer;
+                        } else if (responseString.contains("quizId")) {
+                            active = false;
+                        }
+
+                        Thread.sleep(new Random().nextInt(5000));
+                    } catch (IOException | InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
         }
     }
 
@@ -614,82 +735,91 @@ public class Kahoot extends Thread {
 //                    .add("clientId", clientId)
                     .build();
 
-            Response response = HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/connect", postHeaders.toString(), headers);
-            try {
-                String responseString = response.body().string();
-                if (Kahoot.isDebug())
-                    System.out.println("response = " + responseString);
-                JSONArray responseArray = new JSONArray(responseString);
-                JSONObject r = responseArray.getJSONObject(responseArray.length() - 1);
-                JSONObject a = responseArray.getJSONObject(0);
-                boolean success = r.getBoolean("successful");
-                if (!success) {
-                    System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
-                    System.out.println(responseString);
-                }
-                if (responseString.contains("answerMap") && !responseString.contains("timeLeft")) {
-                    JSONObject data = a.getJSONObject("data");
-                    JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
-                    JSONObject answers = content.getJSONObject("answerMap");
-                    if (answers.length() == 2) {
-                        optionTwoValid = false;
-                        optionThreeValid = false;
-                    } else if (answers.length() == 3) {
-                        optionTwoValid = true;
-                        optionThreeValid = false;
-                    } else {
-                        optionTwoValid = true;
-                        optionThreeValid = true;
-                    }
-                    System.out.println("Answers: 0 through " + (answers.length() - 1));
-                    System.out.print("Answer: ");
-                    int ans = userInput.nextInt();
-                    previousAnswer = ans;
-                    int ra = answers.getInt(Integer.toString(ans));
-                    this.answerQuestion(ra);
-                } else if (responseString.contains("answerMap")) {
-                    System.out.println("Get ready, question is coming up!");
+            HTTPUtils.POST(URL_BASE + gamePin + "/" + sessionToken + "/connect", postHeaders.toString(), headers, new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    e.printStackTrace();
                 }
 
-                if (responseString.contains("primaryMessage")) {
-                    JSONObject data = a.getJSONObject("data");
-                    JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
-                    String primaryMessage = content.getString("primaryMessage");
-                    System.out.println(primaryMessage);
-                } else if (responseString.contains("isCorrect")) {
-                    JSONObject d = a.getJSONObject("data");
-                    JSONObject c = new JSONObject(d.getString("content").replace("\\", ""));
-                    boolean correct = c.getBoolean("isCorrect");
-                    score = c.getInt("points");
-                    totalScore = c.getInt("totalScore");
-                    rank = c.getInt("rank");
-                    Object rawNemesis = c.get("nemesis");
-                    if (rawNemesis == null) {
-                        nemesis = "no one";
-                    } else {
-                        nemesis = (String) rawNemesis;
-                    }
-                    System.out.println(correct ? "Correct!" : "Incorrect.");
-                    System.out.println("You got " + score + " points from that question");
-                    System.out.println("You currently have " + totalScore + " points");
-                    System.out.println("You are in rank " + rank + ", behind " + nemesis);
-                } else if (responseString.contains("quizId")) {
-                    JSONObject data = a.getJSONObject("data");
-                    JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
-                    String quizId = content.getString("quizId");
-                    int playerCount = content.getInt("playerCount");
-                    System.out.println("This quiz's ID is " + quizId);
-                    System.out.println("Players in game: " + playerCount);
-                    active = false;
-                }
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    try {
+                        String responseString = response.body().string();
+                        if (Kahoot.isDebug())
+                            System.out.println("response = " + responseString);
+                        JSONArray responseArray = new JSONArray(responseString);
+                        JSONObject r = responseArray.getJSONObject(responseArray.length() - 1);
+                        JSONObject a = responseArray.getJSONObject(0);
+                        boolean success = r.getBoolean("successful");
+                        if (!success) {
+                            System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
+                            System.out.println(responseString);
+                        }
+                        if (responseString.contains("answerMap") && !responseString.contains("timeLeft")) {
+                            JSONObject data = a.getJSONObject("data");
+                            JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
+                            JSONObject answers = content.getJSONObject("answerMap");
+                            if (answers.length() == 2) {
+                                optionTwoValid = false;
+                                optionThreeValid = false;
+                            } else if (answers.length() == 3) {
+                                optionTwoValid = true;
+                                optionThreeValid = false;
+                            } else {
+                                optionTwoValid = true;
+                                optionThreeValid = true;
+                            }
+                            System.out.println("Answers: 0 through " + (answers.length() - 1));
+                            System.out.print("Answer: ");
+                            int ans = userInput.nextInt();
+                            previousAnswer = ans;
+                            int ra = answers.getInt(Integer.toString(ans));
+                            Kahoot.this.answerQuestion(ra);
+                        } else if (responseString.contains("answerMap")) {
+                            System.out.println("Get ready, question is coming up!");
+                        }
 
-                Thread.sleep(50);
-            } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
-            }
+                        if (responseString.contains("primaryMessage")) {
+                            JSONObject data = a.getJSONObject("data");
+                            JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
+                            String primaryMessage = content.getString("primaryMessage");
+                            System.out.println(primaryMessage);
+                        } else if (responseString.contains("isCorrect")) {
+                            JSONObject d = a.getJSONObject("data");
+                            JSONObject c = new JSONObject(d.getString("content").replace("\\", ""));
+                            boolean correct = c.getBoolean("isCorrect");
+                            score = c.getInt("points");
+                            totalScore = c.getInt("totalScore");
+                            rank = c.getInt("rank");
+                            Object rawNemesis = c.get("nemesis");
+                            if (rawNemesis == null) {
+                                nemesis = "no one";
+                            } else {
+                                nemesis = (String) rawNemesis;
+                            }
+                            System.out.println(correct ? "Correct!" : "Incorrect.");
+                            System.out.println("You got " + score + " points from that question");
+                            System.out.println("You currently have " + totalScore + " points");
+                            System.out.println("You are in rank " + rank + ", behind " + nemesis);
+                        } else if (responseString.contains("quizId")) {
+                            JSONObject data = a.getJSONObject("data");
+                            JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
+                            String quizId = content.getString("quizId");
+                            int playerCount = content.getInt("playerCount");
+                            System.out.println("This quiz's ID is " + quizId);
+                            System.out.println("Players in game: " + playerCount);
+                            active = false;
+                        }
+
+                        Thread.sleep(50);
+                    } catch (IOException | InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    System.out.println("Game over!");
+                }
+            });
         }
-
-        System.out.println("Game over!");
     }
 
 }
