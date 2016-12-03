@@ -23,7 +23,6 @@ public class KahootClient implements Runnable {
     private IActionProvider actionProvider;
 
     public KahootClient(String username, IActionProvider actionProvider) {
-        System.out.println("Created KahootClient{username=\"" + username + "\"}");
         this.username = username;
         this.actionProvider = actionProvider;
     }
@@ -31,8 +30,6 @@ public class KahootClient implements Runnable {
     @Override
     public void run() {
         if (game == null || game.gamepin == 0) throw new RuntimeException("No game set");
-
-        System.out.println(this.toString() + " has started!");
 
         try {
             // Enter game
@@ -48,8 +45,6 @@ public class KahootClient implements Runnable {
     }
 
     private void play() throws IOException {
-        System.out.println("play() game.active: " + game.active);
-
         while (game.active) {
             JSONObject postHeaders = new JSONObject();
             postHeaders.put("channel", "/meta/connect");

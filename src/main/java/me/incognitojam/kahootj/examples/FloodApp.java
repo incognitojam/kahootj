@@ -6,7 +6,6 @@ import me.incognitojam.kahootj.actionprovider.IActionProvider;
 import me.incognitojam.kahootj.actionprovider.RandomActionProvider;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Random;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
@@ -39,7 +38,6 @@ public class FloodApp {
         ExecutorService executor = Executors.newCachedThreadPool();
         IActionProvider actionProvider = new RandomActionProvider();
         KahootClient[] bots = new KahootClient[botCount];
-        System.out.println(Arrays.toString(bots));
 
         for (int i = 0; i < bots.length; i++) {
             String name = base + "16" + (1000 + new Random().nextInt(8999));

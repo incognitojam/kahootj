@@ -4,12 +4,12 @@ import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.Response;
+import org.apache.commons.codec.binary.Base64;
 import org.json.JSONObject;
 
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
-import java.util.Base64;
 
 public class SessionUtils {
 
@@ -71,7 +71,7 @@ public class SessionUtils {
      * @return The decoded, usable session token
      */
     static String decodeSessionToken(String encoded) {
-        byte[] rawToken = Base64.getDecoder().decode(encoded);
+        byte[] rawToken = Base64.decodeBase64(encoded);
         byte[] challengeBytes = challengeSolution.getBytes(Charset.forName("ASCII"));
 
         for (int i = 0; i < rawToken.length; i++) {
