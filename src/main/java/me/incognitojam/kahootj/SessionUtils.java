@@ -108,9 +108,7 @@ public class SessionUtils {
                 wasLastGameTeam = responseString.contains("team");
                 if (responseString.toLowerCase().contains("challenge")) {
                     JSONObject jsonObject = new JSONObject(responseString);
-                    System.out.println(jsonObject);
                     String challenge = jsonObject.getString("challenge");
-                    System.out.println(challenge);
                     challengeSolution = solveChallenge(challenge);
                 }
                 return headers.get(key);
