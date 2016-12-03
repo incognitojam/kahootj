@@ -1,82 +1,39 @@
 package me.incognitojam.kahootj;
 
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.Response;
 import org.json.JSONObject;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.util.Base64;
-import java.util.regex.Pattern;
 
 public class SessionUtils {
 
+    public interface SessionCallback<T> {
+
+        void onSuccess(T object);
+
+        void onFailure(Exception exception);
+
+    }
+
     private static boolean wasLastGameTeam = false;
 
-    private static long challengeSolution = 0; // last challenge solution
+    private static String challengeSolution; // last challenge solution
 
     static boolean getLastGameTeam() {
         return wasLastGameTeam;
     }
 
-    private static long solveChallenge(String challenge) {
-        challenge = challenge.replace("  ", " ");
-        String[] challengeArray;
-
-        long solution;
-
-        // Numbers occur on each even index of the array such as 0, 2, 4, and so on
-        // Operators occur on each odd index of the array such as 1, 3, 5, and so on
-
-        if (Pattern.matches("^([0-9]*) \\* \\(([0-9]*) \\+ ([0-9]*)\\)$", challenge)) {
-            challenge = challenge.replace("(", "").replace(")", "");
-            challengeArray = challenge.split(" ");
-            long num1 = Integer.parseInt(challengeArray[0]);
-            long num2 = Integer.parseInt(challengeArray[2]);
-            long num3 = Integer.parseInt(challengeArray[4]);
-
-            solution = num1 * (num2 + num3);
-        } else if (Pattern.matches("^\\(([0-9]*) \\+ ([0-9]*)\\) \\* ([0-9]*)$", challenge)) {
-            challenge = challenge.replace("(", "").replace(")", "");
-            challengeArray = challenge.split(" ");
-            long num1 = Integer.parseInt(challengeArray[0]);
-            long num2 = Integer.parseInt(challengeArray[2]);
-            long num3 = Integer.parseInt(challengeArray[4]);
-
-            solution = (num1 + num2) * num3;
-        } else if (Pattern.matches("^([0-9]*) - \\(([0-9]*) \\* ([0-9]*)\\)$", challenge)) {
-            challenge = challenge.replace("(", "").replace(")", "");
-            challengeArray = challenge.split(" ");
-            long num1 = Integer.parseInt(challengeArray[0]);
-            long num2 = Integer.parseInt(challengeArray[2]);
-            long num3 = Integer.parseInt(challengeArray[4]);
-
-            solution = num1 - (num2 * num3);
-        } else if (Pattern.matches("^\\(([0-9]*) \\+ ([0-9]*)\\) \\* \\(([0-9]*) \\* ([0-9]*)\\)$", challenge)) {
-            challenge = challenge.replace("(", "").replace(")", "");
-            challengeArray = challenge.split(" ");
-            long num1 = Integer.parseInt(challengeArray[0]);
-            long num2 = Integer.parseInt(challengeArray[2]);
-            long num3 = Integer.parseInt(challengeArray[4]);
-            long num4 = Integer.parseInt(challengeArray[6]);
-
-            solution = (num1 + num2) * (num3 * num4);
-        } else {
-            challenge = challenge.replace("(", "").replace(")", "");
-            challengeArray = challenge.split(" ");
-            solution = -1;
-            System.out.println("An unknown challenge was returned. Please report this to the developers.");
-            for (int i = 0; i < challengeArray.length; i++) {
-                System.out.println("challengeArray[" + i + "] = '" + challengeArray[i] + "'");
-            }
-        }
-
-        if (Kahoot.isDebug()) {
-            for (int i = 0; i < challengeArray.length; i++) {
-                System.out.println("challengeArray[" + i + "] = '" + challengeArray[i] + "'");
-            }
-            System.out.println("CHALLENGE SOLUTION = " + solution);
-        }
-
-        return solution;
+    private static String solveChallenge(String challenge) throws IOException {
+        String urlEncodedChallenge = URLEncoder.encode(challenge, "UTF-8").replace("*", "%2A");
+        Call call = HTTPUtils.GET("http://safeval.pw/eval?code=" + urlEncodedChallenge);
+        Response response = call.execute();
+        return response.body().string();
     }
 
     /**
@@ -85,26 +42,43 @@ public class SessionUtils {
      * @param gamepin The game PIN to check
      * @return true if game PIN is valid, false if game PIN is invalid or an exception was thrown.
      */
-    public static boolean checkPINValidity(int gamepin) {
-        Response response = HTTPUtils.GET("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
+    public static boolean checkPINValidity(int gamepin) throws IOException {
+        return isResponseValid(HTTPUtils.GET_RESPONSE("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis()));
+    }
+
+    public static void checkPINValidity(int gamepin, SessionCallback<Boolean> callback) {
+        Call call = HTTPUtils.GET("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                callback.onFailure(e);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                callback.onSuccess(isResponseValid(response));
+            }
+        });
+    }
+
+    public static boolean isResponseValid(Response response) {
         return response != null && response.code() == 200;
     }
 
     /**
      * Uses the last challenge solution to decode the session token.
-     *
      * @param encoded The encoded session token
      * @return The decoded, usable session token
      */
-    public static String decodeSessionToken(String encoded) {
+    static String decodeSessionToken(String encoded) {
         byte[] rawToken = Base64.getDecoder().decode(encoded);
-        byte[] challengeBytes = Long.toString(challengeSolution).getBytes();
+        byte[] challengeBytes = challengeSolution.getBytes(Charset.forName("ASCII"));
 
         for (int i = 0; i < rawToken.length; i++) {
             rawToken[i] ^= challengeBytes[i % challengeBytes.length];
         }
 
-        return new String(rawToken);
+        return new String(rawToken, Charset.forName("ASCII"));
     }
 
     /**
@@ -115,34 +89,32 @@ public class SessionUtils {
      * @param gamepin The game PIN to retrieve a session token for
      * @return The encoded session token
      */
-    public static String getSessionToken(int gamepin) {
-        Response response = HTTPUtils.GET("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
+    public static String getSessionToken(int gamepin) throws IOException {
+        Response response = HTTPUtils.GET_RESPONSE("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
         if (response == null) {
             System.out.println("Response is null");
             return null;
         }
         Headers headers = response.headers();
-        try {
-            for (String key : headers.names()) {
-                if (key.equalsIgnoreCase("x-kahoot-session-token")) {
-                    String responseString = response.body().string();
+        for (String key : headers.names()) {
+            if (key.equalsIgnoreCase("x-kahoot-session-token")) {
+                String responseString = response.body().string();
 
-                    if (Kahoot.isDebug()) {
-                        System.out.println("SESSION = " + headers.get(key));
-                        System.out.println("SESSION REQUEST RESPONSE BODY = " + responseString);
-                    }
-
-                    wasLastGameTeam = responseString.contains("team");
-                    if (responseString.toLowerCase().contains("challenge")) {
-                        JSONObject jsonObject = new JSONObject(responseString);
-                        String challenge = jsonObject.getString("challenge");
-                        challengeSolution = solveChallenge(challenge);
-                    }
-                    return headers.get(key);
+                if (KahootClient.isDebug()) {
+                    System.out.println("SESSION = " + headers.get(key));
+                    System.out.println("SESSION REQUEST RESPONSE BODY = " + responseString);
                 }
+
+                wasLastGameTeam = responseString.contains("team");
+                if (responseString.toLowerCase().contains("challenge")) {
+                    JSONObject jsonObject = new JSONObject(responseString);
+                    System.out.println(jsonObject);
+                    String challenge = jsonObject.getString("challenge");
+                    System.out.println(challenge);
+                    challengeSolution = solveChallenge(challenge);
+                }
+                return headers.get(key);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
         System.out.println("getSessionToken() null");
         return null;

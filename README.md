@@ -4,7 +4,7 @@ Reverse engineering kahoot.it
 
 This has similar functionality to the code [here (kahoot-hack)](https://github.com/Arccotangent/kahoot-hack) but it is being rewritten as a library so that you can develop custom Kahoot! apps and clients more easily.
 
-Working as of November 26th, 2016
+Working as of December 3rd, 2016
 
 ## Building
 

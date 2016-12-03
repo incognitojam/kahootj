@@ -1,23 +1,28 @@
 package me.incognitojam.kahootj.examples;
 
-import me.incognitojam.kahootj.Kahoot;
+import me.incognitojam.kahootj.KahootClient;
 import me.incognitojam.kahootj.SessionUtils;
+import me.incognitojam.kahootj.actionprovider.IActionProvider;
+import me.incognitojam.kahootj.actionprovider.RandomActionProvider;
 
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class FloodApp {
 
     private static final int BOTS_PER_SECOND = 25;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         System.out.print("Enter Game PIN: ");
         final Scanner userInput = new Scanner(System.in);
-        final int gamePin = userInput.nextInt();
+        final int gamepin = userInput.nextInt();
         userInput.nextLine(); // There is a newline character submitted with the int
         System.out.print("Checking game PIN validity... ");
-
-        if (SessionUtils.checkPINValidity(gamePin)) {
+        if (SessionUtils.checkPINValidity(gamepin)) {
             System.out.println("valid game PIN!");
         } else {
             System.out.println("invalid game PIN! Exiting.");
@@ -31,11 +36,15 @@ public class FloodApp {
         int botCount = userInput.nextInt();
         System.out.println("Confirmation: Entering with " + botCount + " bots.");
 
-        Kahoot[] bots = new Kahoot[botCount];
+        ExecutorService executor = Executors.newCachedThreadPool();
+        IActionProvider actionProvider = new RandomActionProvider();
+        KahootClient[] bots = new KahootClient[botCount];
+        System.out.println(Arrays.toString(bots));
 
         for (int i = 0; i < bots.length; i++) {
             String name = base + "16" + (1000 + new Random().nextInt(8999));
-            bots[i] = new Kahoot(name, gamePin, userInput, 2, true); // Instantly activate Kahoot object when botting. Otherwise this leads to bugs.
+            bots[i] = new KahootClient(name, actionProvider); // Instantly activate Kahoot object when botting. Otherwise this leads to bugs.
+
             System.out.print("Initializing Kahoot bots: " + (i + 1) + " / " + bots.length + "\r");
             try {
                 Thread.sleep(5); // Limit initializations to 200 bots per second
@@ -43,33 +52,40 @@ public class FloodApp {
                 e.printStackTrace();
             }
         }
-        System.out.println("");
 
-        System.out.println((bots[0].isTeamGame() ? "Gamemode: TEAMS" : "Gamemode: CLASSIC"));
-
-        int count = 0;
-        for (Kahoot bot : bots) {
-            bot.start();
-            System.out.print("Connecting Kahoot bots: " + (count++ + 1) + " / " + bots.length + "\r");
+        for (int i = 0; i < bots.length; i++) {
+            KahootClient bot = bots[i];
+            bot.setGame(gamepin);
+            executor.submit(bot);
+            System.out.print("Connecting Kahoot bots: " + (i + 1) + " / " + bots.length + "\r");
             try {
                 Thread.sleep(1000 / BOTS_PER_SECOND); // Rate limit sign ins to max_bps bots per second
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-        System.out.println("");
 
-        System.out.println("All bots are in game. While the bots are running, the main thread will print answer statistics.");
+        while (!botsReady(bots)) {
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
 
-        int quid = 0; //Question number
+        System.out.println("\n" + (bots[0].isTeamGame() ? "Gamemode: TEAMS" : "Gamemode: CLASSIC"));
+        System.out.println("\nAll bots are in game. While the bots are running, the main thread will print answer statistics.");
+
+        // Question number
+        int questionId = 0;
 
         int a = 0;
         int b = 0;
         int c = 0;
         int d = 0;
 
-        while (bots[bots.length - 1].gameRunning()) { // while the last bot is still in the game...
-            for (Kahoot bot : bots) { // ...get all answers submitted by the bots and count them up...
+        while (bots[bots.length - 1].isGameRunning()) { // while the last bot is still in the game...
+            for (KahootClient bot : bots) { // ...get all answers submitted by the bots and count them up...
                 try {
                     int lastAnswer = bot.getLastAnswerBlocking();
                     if (lastAnswer == 0) {
@@ -87,15 +103,15 @@ public class FloodApp {
                     e.printStackTrace();
                 }
             }
-            if (!bots[bots.length - 1].gameRunning()) {
+            if (!bots[bots.length - 1].isGameRunning()) {
                 break;
             }
-            quid++;
-            System.out.println("---QUESTION " + quid + " STATISTICS---"); //..then display the statistics...
-            System.out.println("Answer 0: " + a);
-            System.out.println("Answer 1: " + b);
-            System.out.println("Answer 2: " + c + (bots[bots.length - 1].wasLastQuestionAnswer2Valid() ? "" : "(invalid answer)"));
-            System.out.println("Answer 3: " + d + (bots[bots.length - 1].wasLastQuestionAnswer3Valid() ? "" : "(invalid answer)"));
+            questionId++;
+            System.out.println("---QUESTION " + questionId + " STATISTICS---"); //..then display the statistics...
+            System.out.println("Answer 1: " + a);
+            System.out.println("Answer 2: " + b);
+            System.out.println("Answer 3: " + c + (bots[bots.length - 1].getGame().optionThreeValid ? "" : "(invalid answer)"));
+            System.out.println("Answer 4: " + d + (bots[bots.length - 1].getGame().optionFourValid ? "" : "(invalid answer)"));
             a = 0; //...finally clear the variables for the next count
             b = 0;
             c = 0;
@@ -104,6 +120,12 @@ public class FloodApp {
 
         System.out.println("The game appears to have ended. Exiting the program!");
         System.exit(0);
+    }
+
+    private static boolean botsReady(KahootClient[] bots) {
+        for (KahootClient client : bots)
+            if (!client.isGameRunning()) return false;
+        return true;
     }
 
 }
