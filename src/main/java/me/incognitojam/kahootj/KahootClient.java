@@ -1,12 +1,13 @@
 package me.incognitojam.kahootj;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import me.incognitojam.kahootj.actionprovider.IActionProvider;
 import okhttp3.Call;
 import okhttp3.Headers;
 import okhttp3.Headers.Builder;
 import okhttp3.Response;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.IOException;
 
@@ -46,10 +47,10 @@ public class KahootClient implements Runnable {
 
     private void play() throws IOException {
         while (game.active) {
-            JSONObject postHeaders = new JSONObject();
-            postHeaders.put("channel", "/meta/connect");
-            postHeaders.put("connectionType", "long-polling");
-            postHeaders.put("clientId", clientId);
+            JsonObject postHeaders = new JsonObject();
+            postHeaders.addProperty("channel", "/meta/connect");
+            postHeaders.addProperty("connectionType", "long-polling");
+            postHeaders.addProperty("clientId", clientId);
 
             Headers headers = new Headers.Builder()
                     .add("Cookie", bayeuxCookie)
@@ -59,36 +60,41 @@ public class KahootClient implements Runnable {
                     .build();
 
             Call call = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken + "/connect", postHeaders.toString(), headers);
-            Response response = call.execute();
+            Response response;
+            try {
+                response = call.execute();
+            } catch (Exception e) {
+                response = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken + "/connect", postHeaders.toString(), headers).execute();
+            }
             String responseString = response.body().string();
             if (KahootClient.isDebug())
                 System.out.println("response = " + responseString);
-            JSONArray responseArray = new JSONArray(responseString);
-            JSONObject responseObject = responseArray.getJSONObject(responseArray.length() - 1);
-            JSONObject dataObject = responseArray.getJSONObject(0);
-            boolean success = responseObject.getBoolean("successful");
+            JsonArray responseArray = new JsonParser().parse(responseString).getAsJsonArray();
+            JsonObject responseObject = responseArray.get(responseArray.size() - 1).getAsJsonObject();
+            JsonObject dataObject = responseArray.get(0).getAsJsonObject();
+            boolean success = responseObject.get("successful").getAsBoolean();
             if (!success) {
                 System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
                 System.out.println(responseString);
             }
             if (responseString.contains("answerMap") && !responseString.contains("timeLeft")) {
-                JSONObject data = dataObject.getJSONObject("data");
-                JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
-                JSONObject answers = content.getJSONObject("answerMap");
-                if (answers.length() == 2) {
+                JsonObject data = dataObject.get("data").getAsJsonObject();
+                JsonObject content = new JsonParser().parse(data.get("content").getAsString().replace("\\", "")).getAsJsonObject();
+                JsonObject answers = content.get("answerMap").getAsJsonObject();
+                if (answers.size() == 2) {
                     game.optionThreeValid = false;
                     game.optionFourValid = false;
-                } else if (answers.length() == 3) {
+                } else if (answers.size() == 3) {
                     game.optionThreeValid = true;
                     game.optionFourValid = false;
                 } else {
                     game.optionThreeValid = true;
                     game.optionFourValid = true;
                 }
-                System.out.println("Answers: 0 through " + (answers.length() - 1));
+                System.out.println("Answers: 0 through " + (answers.size() - 1));
                 int ans = actionProvider.getChoice(game);
                 game.previousAnswer = ans;
-                int ra = answers.getInt(Integer.toString(ans));
+                int ra = answers.get(Integer.toString(ans)).getAsInt();
                 KahootClient.this.answerQuestion(ra);
 //                System.out.print("Answer: ");
 //                int ans = userInput.nextInt();
@@ -100,17 +106,17 @@ public class KahootClient implements Runnable {
             }
 
             if (responseString.contains("primaryMessage")) {
-                JSONObject data = dataObject.getJSONObject("data");
-                JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
-                String primaryMessage = content.getString("primaryMessage");
+                JsonObject data = dataObject.get("data").getAsJsonObject();
+                JsonObject content = new JsonParser().parse(data.get("content").getAsString().replace("\\", "")).getAsJsonObject();
+                String primaryMessage = content.get("primaryMessage").getAsString();
                 System.out.println(primaryMessage);
             } else if (responseString.contains("isCorrect")) {
-                JSONObject d = dataObject.getJSONObject("data");
-                JSONObject c = new JSONObject(d.getString("content").replace("\\", ""));
-                boolean correct = c.getBoolean("isCorrect");
-                game.lastScore = c.getInt("points");
-                game.totalScore = c.getInt("totalScore");
-                game.currentRank = c.getInt("rank");
+                JsonObject d = dataObject.get("data").getAsJsonObject();
+                JsonObject c = new JsonParser().parse(d.get("content").getAsString().replace("\\", "")).getAsJsonObject();
+                boolean correct = c.get("isCorrect").getAsBoolean();
+                game.lastScore = c.get("points").getAsInt();
+                game.totalScore = c.get("totalScore").getAsInt();
+                game.currentRank = c.get("rank").getAsInt();
                 Object rawNemesis = c.get("nemesis");
                 if (rawNemesis == null) {
                     game.nemesis = "no one";
@@ -122,10 +128,10 @@ public class KahootClient implements Runnable {
                 System.out.println("You currently have " + game.totalScore + " points");
                 System.out.println("You are in rank " + game.currentRank + ", behind " + game.nemesis);
             } else if (responseString.contains("quizId")) {
-                JSONObject data = dataObject.getJSONObject("data");
-                JSONObject content = new JSONObject(data.getString("content").replace("\\", ""));
-                String quizId = content.getString("quizId");
-                int playerCount = content.getInt("playerCount");
+                JsonObject data = dataObject.get("data").getAsJsonObject();
+                JsonObject content = new JsonParser().parse(data.get("content").getAsString().replace("\\", "")).getAsJsonObject();
+                String quizId = content.get("quizId").getAsString();
+                int playerCount = content.get("playerCount").getAsInt();
                 System.out.println("This quiz's ID is " + quizId);
                 System.out.println("Players in game: " + playerCount);
                 game.active = false;
@@ -141,39 +147,39 @@ public class KahootClient implements Runnable {
 
     private void answerQuestion(int answer) throws IOException {
         //String device = "{\"userAgent\": \"openhacky/1.7.7.1\", \"screen\": {\"width\": 1337, \"height\": 1337}}";
-        JSONObject device = new JSONObject();
-        device.put("userAgent", HTTPUtils.USER_AGENT);
+        JsonObject device = new JsonObject();
+        device.addProperty("userAgent", HTTPUtils.USER_AGENT);
 
-        JSONObject screen = new JSONObject();
-        screen.put("width", 1337);
-        screen.put("height", 1337);
-
-        device.put("screen", screen);
+        JsonObject screen = new JsonObject();
+        screen.addProperty("width", 1337);
+        screen.addProperty("height", 1337);
+        
+        device.add("screen", screen);
 
         //String content = "{\"choice\": " + ans + ", \"meta\": \"{\"lag\": 22, \"device\": \"" + device + "\"}\"}";
 
-        JSONObject meta = new JSONObject();
-        meta.put("lag", 22);
-        meta.put("device", device);
+        JsonObject meta = new JsonObject();
+        meta.addProperty("lag", 22);
+        meta.add("device", device);
 
-        JSONObject content = new JSONObject();
-        content.put("choice", answer);
-        content.put("meta", meta);
+        JsonObject content = new JsonObject();
+        content.addProperty("choice", answer);
+        content.add("meta", meta);
 
         //String content = "{\"choice\":" + ans + ",\"meta\":{\"lag\":22,\"device\":{\"userAgent\":\"" + HTTP.uagent + "\",\"screen\":{\"width\":360,\"height\":640}}}}";
 
-        JSONObject data = new JSONObject();
-        data.put("id", 6);
-        data.put("type", "message");
-        data.put("gameid", game.gamepin);
-        data.put("host", "kahoot.it");
-        data.put("content", content.toString());
+        JsonObject data = new JsonObject();
+        data.addProperty("id", 6);
+        data.addProperty("type", "message");
+        data.addProperty("gameid", game.gamepin);
+        data.addProperty("host", "kahoot.it");
+        data.addProperty("content", content.toString());
         //data.put("connectionType", "long-polling");
 
-        JSONObject base = new JSONObject();
-        base.put("clientId", clientId);
-        base.put("channel", "/service/controller");
-        base.put("data", data);
+        JsonObject base = new JsonObject();
+        base.addProperty("clientId", clientId);
+        base.addProperty("channel", "/service/controller");
+        base.add("data", data);
 
         //String data = "{\"id\": 6, \"type\": \"message\", \"gameid\": " + gameid + ", \"host\": \"kahoot.it\", \"content\": \"" + content + "\", \"channel\": \"/service/controller\", \"connectionType\", \"long-polling\", \"clientId\", \"" + client_id + "\"}";
 
@@ -184,9 +190,9 @@ public class KahootClient implements Runnable {
         String responseString = response.body().string();
         if (KahootClient.isDebug())
             System.out.println("AQ = " + responseString);
-        JSONArray r2 = new JSONArray(responseString);
-        JSONObject r = r2.getJSONObject(r2.length() - 1);
-        boolean success = r.getBoolean("successful");
+        JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
+        JsonObject r = r2.get(r2.size() - 1).getAsJsonObject();
+        boolean success = r.get("successful").getAsBoolean();
         if (!success) {
             System.out.println("[QUESTION/ANSWER] Error connecting to server! Full server response below.");
             System.out.println(responseString);
@@ -199,9 +205,9 @@ public class KahootClient implements Runnable {
             System.out.println("Attempted to disconnect when client not active!");
         }
 
-        JSONObject c = new JSONObject();
-        c.put("channel", "/meta/disconnect");
-        c.put("clientId", clientId);
+        JsonObject c = new JsonObject();
+        c.addProperty("channel", "/meta/disconnect");
+        c.addProperty("clientId", clientId);
 
         Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
         Call call = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken + "/disconnect", c.toString(), headers);
@@ -209,9 +215,9 @@ public class KahootClient implements Runnable {
         String responseString = response.body().string();
         if (KahootClient.isDebug())
             System.out.println("D = " + responseString);
-        JSONArray responseArray = new JSONArray(responseString);
-        JSONObject responseObject = responseArray.getJSONObject(0);
-        boolean success = responseObject.has("successful") && responseObject.getBoolean("successful");
+        JsonArray responseArray = new JsonParser().parse(responseString).getAsJsonArray();
+        JsonObject responseObject = responseArray.get(0).getAsJsonObject();
+        boolean success = responseObject.has("successful") && responseObject.get("successful").getAsBoolean();
         if (!success) {
             System.out.println("[DISCONNECT] Error connecting to server! Full server response below.");
             System.out.println(responseString);
@@ -222,18 +228,18 @@ public class KahootClient implements Runnable {
 
     private void login() throws IOException {
         {
-            JSONObject c = new JSONObject();
-            c.put("channel", "/service/controller");
-            c.put("clientId", clientId);
+            JsonObject c = new JsonObject();
+            c.addProperty("channel", "/service/controller");
+            c.addProperty("clientId", clientId);
             //c.put("id", "62");
 
-            JSONObject data = new JSONObject();
-            data.put("type", "login");
-            data.put("gameid", game.gamepin);
-            data.put("host", "kahoot.it");
-            data.put("name", username);
+            JsonObject data = new JsonObject();
+            data.addProperty("type", "login");
+            data.addProperty("gameid", game.gamepin);
+            data.addProperty("host", "kahoot.it");
+            data.addProperty("name", username);
 
-            c.put("data", data);
+            c.add("data", data);
 
             //String d = "{\"clientId\":\"" + client_id + "\",\"data\":{\"gameid\":" + gameid + ",\"host\":\"kahoot.it\",\"name\":\"" + uname + "\",\"type\":\"login\"},\"channel\":\"/service/controller\"}";
 
@@ -243,9 +249,9 @@ public class KahootClient implements Runnable {
             String responseString = response.body().string();
             if (KahootClient.isDebug())
                 System.out.println("L1 = " + responseString);
-            JSONArray responseArray = new JSONArray(responseString);
-            JSONObject responseObject = responseArray.getJSONObject(responseArray.length() - 1);
-            boolean success = responseObject.getBoolean("successful");
+            JsonArray responseArray = new JsonParser().parse(responseString).getAsJsonArray();
+            JsonObject responseObject = responseArray.get(responseArray.size() - 1).getAsJsonObject();
+            boolean success = responseObject.get("successful").getAsBoolean();
             if (!success) {
                 System.out.println("[LOGIN/BEGIN] Error connecting to server! Full server response below.");
                 System.out.println(responseString);
@@ -266,9 +272,9 @@ public class KahootClient implements Runnable {
             String responseString = response.body().string();
             if (KahootClient.isDebug())
                 System.out.println("L2 = " + responseString);
-            JSONArray r2 = new JSONArray(responseString);
-            JSONObject r = r2.getJSONObject(r2.length() - 1);
-            boolean success = r.getBoolean("successful");
+            JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
+            JsonObject r = r2.get(r2.size() - 1).getAsJsonObject();
+            boolean success = r.get("successful").getAsBoolean();
             if (!success) {
                 System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
                 System.out.println(responseString);
@@ -291,21 +297,21 @@ public class KahootClient implements Runnable {
 
         // Stage ONE
         {
-            JSONObject advice = new JSONObject();
-            advice.put("timeout", 60000);
-            advice.put("interval", 0);
+            JsonObject advice = new JsonObject();
+            advice.addProperty("timeout", 60000);
+            advice.addProperty("interval", 0);
 
-            JSONObject handshakeData = new JSONObject();
-            handshakeData.put("advice", advice.toString());
-            handshakeData.put("version", "1.0");
-            handshakeData.put("minimumVersion", "1.0");
-            handshakeData.put("channel", "/meta/handshake");
+            JsonObject handshakeData = new JsonObject();
+            handshakeData.addProperty("advice", advice.toString());
+            handshakeData.addProperty("version", "1.0");
+            handshakeData.addProperty("minimumVersion", "1.0");
+            handshakeData.addProperty("channel", "/meta/handshake");
 
-            JSONArray supportedConnTypes = new JSONArray();
+            JsonArray supportedConnTypes = new JsonArray();
             //supportedConnTypes.put("websocket");
-            supportedConnTypes.put("long-polling");
+            supportedConnTypes.add("long-polling");
 
-            handshakeData.put("supportedConnectionTypes", supportedConnTypes.toString());
+            handshakeData.addProperty("supportedConnectionTypes", supportedConnTypes.toString());
 
             Call call = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken + "/handshake", handshakeData.toString());
             Response response = call.execute();
@@ -321,18 +327,19 @@ public class KahootClient implements Runnable {
             if (KahootClient.isDebug())
                 System.out.println("1 = " + responseString);
 
-            JSONArray responseJson = new JSONArray(responseString);
-            JSONObject responseObject = responseJson.getJSONObject(0);
-            clientId = responseObject.getString("clientId");
+            System.out.println(responseString);
+            JsonArray responseJson = new JsonParser().parse(responseString).getAsJsonArray();
+            JsonObject responseObject = responseJson.get(0).getAsJsonObject();
+            clientId = responseObject.get("clientId").getAsString();
 
         }
 
         // STAGE TWO
         {
-            JSONObject content = new JSONObject();
-            content.put("channel", "/meta/unsubscribe");
-            content.put("clientId", clientId);
-            content.put("subscription", "/service/controller");
+            JsonObject content = new JsonObject();
+            content.addProperty("channel", "/meta/unsubscribe");
+            content.addProperty("clientId", clientId);
+            content.addProperty("subscription", "/service/controller");
 
             Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
             Call call = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken, content.toString(), headers);
@@ -341,9 +348,9 @@ public class KahootClient implements Runnable {
             if (KahootClient.isDebug())
                 System.out.println("stage 2 = " + response);
 
-            JSONArray responseArray = new JSONArray(responseString);
-            JSONObject responseObject = responseArray.getJSONObject(0);
-            boolean success = responseObject.getBoolean("successful");
+            JsonArray responseArray = new JsonParser().parse(responseString).getAsJsonArray();
+            JsonObject responseObject = responseArray.get(0).getAsJsonObject();
+            boolean success = responseObject.get("successful").getAsBoolean();
             if (!success) {
                 System.out.println("[STAGE 2] Error connecting to server! Full server response below.");
                 System.out.println(responseString);
@@ -353,10 +360,10 @@ public class KahootClient implements Runnable {
 
         // STAGE THREE
         {
-            JSONObject data = new JSONObject();
-            data.put("channel", "/meta/connect");
-            data.put("clientId", clientId);
-            data.put("connectionType", "long-polling");
+            JsonObject data = new JsonObject();
+            data.addProperty("channel", "/meta/connect");
+            data.addProperty("clientId", clientId);
+            data.addProperty("connectionType", "long-polling");
 
             Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
             Call call = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken + "/connect", data.toString(), headers);
@@ -364,9 +371,9 @@ public class KahootClient implements Runnable {
             String responseString = response.body().string();
             if (KahootClient.isDebug())
                 System.out.println("3 = " + responseString);
-            JSONArray r2 = new JSONArray(responseString);
-            JSONObject r = r2.getJSONObject(0);
-            boolean success = r.getBoolean("successful");
+            JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
+            JsonObject r = r2.get(0).getAsJsonObject();
+            boolean success = r.get("successful").getAsBoolean();
             if (!success) {
                 System.out.println("[STAGE 3] Error connecting to server! Full server response below.");
                 System.out.println(responseString);
@@ -375,11 +382,11 @@ public class KahootClient implements Runnable {
 
         // STAGE FOUR - STATUS SERVICE
         {
-            JSONObject c6 = new JSONObject();
-            c6.put("channel", "/meta/subscribe");
-            c6.put("clientId", clientId);
-            //c6.put("connectionType", "long-polling");
-            c6.put("subscription", "/service/status");
+            JsonObject c6 = new JsonObject();
+            c6.addProperty("channel", "/meta/subscribe");
+            c6.addProperty("clientId", clientId);
+            //c6.addProperty("connectionType", "long-polling");
+            c6.addProperty("subscription", "/service/status");
 
             Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
             Call call = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken, c6.toString(), headers);
@@ -387,9 +394,9 @@ public class KahootClient implements Runnable {
             String responseString = response.body().string();
             if (KahootClient.isDebug())
                 System.out.println("4-1 = " + responseString);
-            JSONArray r2 = new JSONArray(responseString);
-            JSONObject r = r2.getJSONObject(0);
-            boolean success = r.getBoolean("successful");
+            JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
+            JsonObject r = r2.get(0).getAsJsonObject();
+            boolean success = r.get("successful").getAsBoolean();
             if (!success) {
                 System.out.println("[STAGE 4/SERVICE_STATUS] Error connecting to server! Full server response below.");
                 System.out.println(responseString);
@@ -398,11 +405,11 @@ public class KahootClient implements Runnable {
 
         // STAGE FOUR - PLAYER SERVICE
         {
-            JSONObject c7 = new JSONObject();
-            c7.put("channel", "/meta/subscribe");
-            c7.put("clientId", clientId);
-            //c7.put("connectionType", "long-polling");
-            c7.put("subscription", "/service/player");
+            JsonObject c7 = new JsonObject();
+            c7.addProperty("channel", "/meta/subscribe");
+            c7.addProperty("clientId", clientId);
+            //c7.addProperty("connectionType", "long-polling");
+            c7.addProperty("subscription", "/service/player");
 
             Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
             Call call = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken, c7.toString(), headers);
@@ -410,9 +417,9 @@ public class KahootClient implements Runnable {
             String responseString = response.body().string();
             if (KahootClient.isDebug())
                 System.out.println("4-2 = " + responseString);
-            JSONArray r2 = new JSONArray(responseString);
-            JSONObject r = r2.getJSONObject(0);
-            boolean success = r.getBoolean("successful");
+            JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
+            JsonObject r = r2.get(0).getAsJsonObject();
+            boolean success = r.get("successful").getAsBoolean();
             if (!success) {
                 System.out.println("[STAGE 4/SERVICE_PLAYER] Error connecting to server! Full server response below.");
                 System.out.println(responseString);
@@ -421,11 +428,11 @@ public class KahootClient implements Runnable {
 
         // STAGE FOUR - CONTROLLER SERVICE
         {
-            JSONObject c8 = new JSONObject();
-            c8.put("channel", "/meta/subscribe");
-            c8.put("clientId", clientId);
-            //c7.put("connectionType", "long-polling");
-            c8.put("subscription", "/service/controller");
+            JsonObject c8 = new JsonObject();
+            c8.addProperty("channel", "/meta/subscribe");
+            c8.addProperty("clientId", clientId);
+            //c7.addProperty("connectionType", "long-polling");
+            c8.addProperty("subscription", "/service/controller");
 
             Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
             Call call = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken, c8.toString(), headers);
@@ -433,9 +440,9 @@ public class KahootClient implements Runnable {
             String responseString = response.body().string();
             if (KahootClient.isDebug())
                 System.out.println("4-3 = " + responseString);
-            JSONArray r2 = new JSONArray(responseString);
-            JSONObject r = r2.getJSONObject(0);
-            boolean success = r.getBoolean("successful");
+            JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
+            JsonObject r = r2.get(0).getAsJsonObject();
+            boolean success = r.get("successful").getAsBoolean();
             if (!success) {
                 System.out.println("[STAGE 4/SERVICE_CONTROLLER] Error connecting to server! Full server response below.");
                 System.out.println(responseString);

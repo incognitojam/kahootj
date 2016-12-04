@@ -1,11 +1,12 @@
 package me.incognitojam.kahootj;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.Response;
 import org.apache.commons.codec.binary.Base64;
-import org.json.JSONObject;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -107,8 +108,8 @@ public class SessionUtils {
 
                 wasLastGameTeam = responseString.contains("team");
                 if (responseString.toLowerCase().contains("challenge")) {
-                    JSONObject jsonObject = new JSONObject(responseString);
-                    String challenge = jsonObject.getString("challenge");
+                    JsonObject jsonObject = new JsonParser().parse(responseString).getAsJsonObject();
+                    String challenge = jsonObject.get("challenge").getAsString();
                     challengeSolution = solveChallenge(challenge);
                 }
                 return headers.get(key);

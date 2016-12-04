@@ -13,7 +13,7 @@ import java.util.concurrent.Executors;
 
 public class FloodApp {
 
-    private static final int BOTS_PER_SECOND = 25;
+    private static final int BOTS_PER_SECOND = 75;
 
     public static void main(String[] args) throws IOException {
         System.out.print("Enter Game PIN: ");
@@ -44,11 +44,11 @@ public class FloodApp {
             bots[i] = new KahootClient(name, actionProvider); // Instantly activate Kahoot object when botting. Otherwise this leads to bugs.
 
             System.out.print("Initializing Kahoot bots: " + (i + 1) + " / " + bots.length + "\r");
-            try {
-                Thread.sleep(5); // Limit initializations to 200 bots per second
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+//            try {
+//                Thread.sleep(0); // Limit initializations to 200 bots per second
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
         }
 
         for (int i = 0; i < bots.length; i++) {
@@ -65,7 +65,7 @@ public class FloodApp {
 
         while (!botsReady(bots)) {
             try {
-                Thread.sleep(50);
+                Thread.sleep(25);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
