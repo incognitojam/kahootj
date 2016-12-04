@@ -1,12 +1,12 @@
-package me.incognitojam.kahootj;
+package me.incognitojam.kahootj.utils;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import me.incognitojam.kahootj.KahootClient;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.Response;
-import org.apache.commons.codec.binary.Base64;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -26,7 +26,7 @@ public class SessionUtils {
 
     private static String challengeSolution; // last challenge solution
 
-    static boolean getLastGameTeam() {
+    public static boolean getLastGameTeam() {
         return wasLastGameTeam;
     }
 
@@ -34,7 +34,9 @@ public class SessionUtils {
         String urlEncodedChallenge = URLEncoder.encode(challenge, "UTF-8").replace("*", "%2A");
         Call call = HTTPUtils.GET("http://safeval.pw/eval?code=" + urlEncodedChallenge);
         Response response = call.execute();
-        return response.body().string();
+        String string = response.body().string();
+        response.close();
+        return string;
     }
 
     /**
@@ -71,8 +73,8 @@ public class SessionUtils {
      * @param encoded The encoded session token
      * @return The decoded, usable session token
      */
-    static String decodeSessionToken(String encoded) {
-        byte[] rawToken = Base64.decodeBase64(encoded);
+    public static String decodeSessionToken(String encoded) {
+        byte[] rawToken = Base64Utils.decode(encoded);
         byte[] challengeBytes = challengeSolution.getBytes(Charset.forName("ASCII"));
 
         for (int i = 0; i < rawToken.length; i++) {
@@ -112,9 +114,11 @@ public class SessionUtils {
                     String challenge = jsonObject.get("challenge").getAsString();
                     challengeSolution = solveChallenge(challenge);
                 }
+                response.close();
                 return headers.get(key);
             }
         }
+        response.close();
         System.out.println("getSessionToken() null");
         return null;
     }

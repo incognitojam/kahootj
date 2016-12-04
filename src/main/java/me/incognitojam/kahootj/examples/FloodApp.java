@@ -1,19 +1,18 @@
 package me.incognitojam.kahootj.examples;
 
 import me.incognitojam.kahootj.KahootClient;
-import me.incognitojam.kahootj.SessionUtils;
 import me.incognitojam.kahootj.actionprovider.IActionProvider;
 import me.incognitojam.kahootj.actionprovider.RandomActionProvider;
+import me.incognitojam.kahootj.utils.SessionUtils;
 
 import java.io.IOException;
-import java.util.Random;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class FloodApp {
 
-    private static final int BOTS_PER_SECOND = 75;
+    private static final int BOTS_PER_SECOND = 30;
 
     public static void main(String[] args) throws IOException {
         System.out.print("Enter Game PIN: ");
@@ -35,26 +34,17 @@ public class FloodApp {
         int botCount = userInput.nextInt();
         System.out.println("Confirmation: Entering with " + botCount + " bots.");
 
-        ExecutorService executor = Executors.newCachedThreadPool();
+        ExecutorService executor = Executors.newFixedThreadPool(botCount);
         IActionProvider actionProvider = new RandomActionProvider();
         KahootClient[] bots = new KahootClient[botCount];
 
         for (int i = 0; i < bots.length; i++) {
-            String name = base + "16" + (1000 + new Random().nextInt(8999));
-            bots[i] = new KahootClient(name, actionProvider); // Instantly activate Kahoot object when botting. Otherwise this leads to bugs.
+            KahootClient bot = new KahootClient(base + i, actionProvider);
+            bots[i] = bot;
 
-            System.out.print("Initializing Kahoot bots: " + (i + 1) + " / " + bots.length + "\r");
-//            try {
-//                Thread.sleep(0); // Limit initializations to 200 bots per second
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            }
-        }
-
-        for (int i = 0; i < bots.length; i++) {
-            KahootClient bot = bots[i];
             bot.setGame(gamepin);
             executor.submit(bot);
+
             System.out.print("Connecting Kahoot bots: " + (i + 1) + " / " + bots.length + "\r");
             try {
                 Thread.sleep(1000 / BOTS_PER_SECOND); // Rate limit sign ins to max_bps bots per second

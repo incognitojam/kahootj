@@ -1,4 +1,4 @@
-package me.incognitojam.kahootj;
+package me.incognitojam.kahootj.utils;
 
 import okhttp3.*;
 import okhttp3.Request.Builder;
@@ -39,6 +39,20 @@ public class HTTPUtils {
 
     public static Call POST(String url, String rawData, Headers headers) {
         return _POST(url, rawData, headers);
+    }
+
+    public static Response POST_RESPONSE(String url, String rawData, Headers headers) {
+        int attempts = 0;
+        Response response = null;
+        while (response == null && attempts < 10) {
+            try {
+                response = _POST(url, rawData, headers).execute();
+            } catch (IOException e) {
+//                e.printStackTrace();
+            }
+            attempts++;
+        }
+        return response;
     }
 
     public static Call POST(String url, Headers headers) {
