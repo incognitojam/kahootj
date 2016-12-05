@@ -207,9 +207,10 @@ public class KahootClient implements Runnable {
         game.questionAnswered = true;
     }
 
-    private void disconnect() throws IOException {
+    public void disconnect() throws IOException {
         if (!isGameRunning()) {
             System.out.println("Attempted to disconnect when client not active!");
+            return;
         }
 
         JsonObject c = new JsonObject();
