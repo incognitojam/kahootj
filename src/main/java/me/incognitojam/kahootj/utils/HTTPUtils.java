@@ -42,15 +42,13 @@ public class HTTPUtils {
     }
 
     public static Response POST_RESPONSE(String url, String rawData, Headers headers) {
-        int attempts = 0;
         Response response = null;
-        while (response == null && attempts < 10) {
+        while (response == null) {
             try {
                 response = _POST(url, rawData, headers).execute();
             } catch (IOException e) {
 //                e.printStackTrace();
             }
-            attempts++;
         }
         return response;
     }
