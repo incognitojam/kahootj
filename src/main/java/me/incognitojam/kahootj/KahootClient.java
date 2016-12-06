@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import me.incognitojam.kahootj.actionprovider.IActionProvider;
 import me.incognitojam.kahootj.utils.HTTPUtils;
-import me.incognitojam.kahootj.utils.ILogger;
+import me.incognitojam.kahootj.logger.ILogger;
 import me.incognitojam.kahootj.utils.SessionUtils;
 import okhttp3.Call;
 import okhttp3.Headers;

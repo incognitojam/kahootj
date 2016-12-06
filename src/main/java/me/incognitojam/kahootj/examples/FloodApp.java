@@ -34,7 +34,9 @@ public class FloodApp {
         int botCount = userInput.nextInt();
         System.out.println("Confirmation: Entering with " + botCount + " bots.");
 
+        KahootClient.setLogger(System.out::println);
         KahootClient.setDebug(true);
+
         ExecutorService executor = Executors.newFixedThreadPool(botCount);
         IActionProvider actionProvider = new RandomActionProvider();
         KahootClient[] bots = new KahootClient[botCount];

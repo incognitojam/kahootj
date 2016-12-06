@@ -1,4 +1,4 @@
-package me.incognitojam.kahootj.utils;
+package me.incognitojam.kahootj.logger;
 
 public interface ILogger {
 
