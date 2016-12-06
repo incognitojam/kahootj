@@ -31,6 +31,8 @@ package me.incognitojam.kahootj.utils;
  base64
  ***************************************************************/
 
+import me.incognitojam.kahootj.KahootClient;
+
 /**
  * Base64 encoder/decoder.  Does not stream, so be careful with
  * using large amounts of data
@@ -144,15 +146,15 @@ public class Base64Utils {
      */
     public static final void main(String[] args) {
         if (args.length != 1) {
-            System.out.println("Usage: Base64 string");
+            KahootClient.log("Usage: Base64 string");
             System.exit(0);
         }
         try {
             String e = Base64Utils.encode(args[0].getBytes());
             String d = new String(Base64Utils.decode(e));
-            System.out.println("Input   = '" + args[0] + "'");
-            System.out.println("Encoded = '" + e + "'");
-            System.out.println("Decoded = '" + d + "'");
+            KahootClient.log("Input   = '" + args[0] + "'");
+            KahootClient.log("Encoded = '" + e + "'");
+            KahootClient.log("Decoded = '" + d + "'");
         } catch (Exception x) {
             x.printStackTrace();
         }

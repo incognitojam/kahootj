@@ -32,11 +32,15 @@ public class SessionUtils {
 
     private static String solveChallenge(String challenge) throws IOException {
         String urlEncodedChallenge = URLEncoder.encode(challenge, "UTF-8").replace("*", "%2A").replace("console.log(\\\"Offset derived as:\\\", offset);", "");
-        System.out.println("urlEncoded challenge: " + urlEncodedChallenge);
+        if (KahootClient.isDebug()) {
+            KahootClient.log("urlEncoded challenge: " + urlEncodedChallenge);
+        }
         Call call = HTTPUtils.GET("http://safeval.pw/eval?code=" + urlEncodedChallenge);
         Response response = call.execute();
         String string = response.body().string();
-        System.out.println("Solve challenge: " + string);
+        if (KahootClient.isDebug()) {
+            KahootClient.log("Solve challenge: " + string);
+        }
         response.close();
         return string;
     }
@@ -106,8 +110,8 @@ public class SessionUtils {
                 String responseString = response.body().string();
 
                 if (KahootClient.isDebug()) {
-                    System.out.println("SESSION = " + headers.get(key));
-                    System.out.println("SESSION REQUEST RESPONSE BODY = " + responseString);
+                    KahootClient.log("SESSION = " + headers.get(key));
+                    KahootClient.log("SESSION REQUEST RESPONSE BODY = " + responseString);
                 }
 
                 wasLastGameTeam = responseString.contains("team");
@@ -121,7 +125,7 @@ public class SessionUtils {
             }
         }
         response.close();
-        System.out.println("getSessionToken() null");
+        KahootClient.log("getSessionToken() null");
         return null;
     }
 

@@ -1,6 +1,7 @@
 package me.incognitojam.kahootj.actionprovider;
 
 import me.incognitojam.kahootj.Game;
+import me.incognitojam.kahootj.KahootClient;
 
 import java.util.Scanner;
 
@@ -17,7 +18,7 @@ public class UserActionProvider implements IActionProvider {
         int choice = -1;
         while (!isValid(choice, game)) {
             if (choice != -1) System.out.println("Invalid choice!");
-            System.out.print("Please provide an option between 1 and " + getMax(game) + ".");
+            KahootClient.log("Please provide an option between 1 and " + getMax(game) + ".");
             choice = scanner.nextInt();
         }
         return choice - 1;

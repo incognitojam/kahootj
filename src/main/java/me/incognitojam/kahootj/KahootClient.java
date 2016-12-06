@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import me.incognitojam.kahootj.actionprovider.IActionProvider;
 import me.incognitojam.kahootj.utils.HTTPUtils;
+import me.incognitojam.kahootj.utils.ILogger;
 import me.incognitojam.kahootj.utils.SessionUtils;
 import okhttp3.Call;
 import okhttp3.Headers;
@@ -16,6 +17,7 @@ import java.io.IOException;
 public class KahootClient implements Runnable {
     private static final String URL_BASE = "https://kahoot.it/cometd/";
     private static boolean debugMode = false;
+    private static ILogger logger;
 
     private String username;
     private String clientId;
@@ -66,14 +68,14 @@ public class KahootClient implements Runnable {
             Response response = HTTPUtils.POST_RESPONSE(URL_BASE + game.gamepin + "/" + sessionToken + "/connect", postHeaders.toString(), headers);
             String responseString = response.body().string();
             if (KahootClient.isDebug())
-                System.out.println("response = " + responseString);
+                log("response = " + responseString);
             JsonArray responseArray = new JsonParser().parse(responseString).getAsJsonArray();
             JsonObject responseObject = responseArray.get(responseArray.size() - 1).getAsJsonObject();
             JsonObject dataObject = responseArray.get(0).getAsJsonObject();
             boolean success = responseObject.get("successful").getAsBoolean();
             if (!success) {
-                System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+                log("[LOGIN/FINISH] Error connecting to server! Full server response below.");
+                log(responseString);
             }
             if (responseString.contains("answerMap") && !responseString.contains("timeLeft")) {
                 JsonObject data = dataObject.get("data").getAsJsonObject();
@@ -89,13 +91,13 @@ public class KahootClient implements Runnable {
                     game.optionThreeValid = true;
                     game.optionFourValid = true;
                 }
-//                System.out.println("Answers: 0 through " + (answers.size() - 1));
+//                log("Answers: 0 through " + (answers.size() - 1));
                 int ans = actionProvider.getChoice(game);
                 game.previousAnswer = ans;
                 int ra = answers.get(Integer.toString(ans)).getAsInt();
                 KahootClient.this.answerQuestion(ra);
             } else if (responseString.contains("answerMap")) {
-//                System.out.println("Get ready, question is coming up!");
+//                log("Get ready, question is coming up!");
             }
 
             if (responseString.contains("primaryMessage")) {
@@ -103,7 +105,7 @@ public class KahootClient implements Runnable {
                 JsonObject content = new JsonParser().parse(data.get("content").getAsString().replace("\\", "")).getAsJsonObject();
                 String primaryMessage = content.get("primaryMessage").getAsString();
                 if (isDebug()) {
-                    System.out.println("PRIMARY MESSAGE: " + primaryMessage);
+                    log("PRIMARY MESSAGE: " + primaryMessage);
                 }
             } else if (responseString.contains("isCorrect")) {
                 JsonObject dataTwo = responseArray.get(responseArray.get(0).toString().contains("isCorrect") ? 0 : 1).getAsJsonObject();
@@ -112,8 +114,8 @@ public class KahootClient implements Runnable {
                     contentTwo = dataTwo.get("data").getAsJsonObject().get("content").getAsString().replace("\\", "");
                 } catch (Exception e) {
                     e.printStackTrace();
-                    System.out.println("dataTwo: " + dataTwo);
-                    System.out.println("responseArray: " + responseArray);
+                    log("dataTwo: " + dataTwo);
+                    log("responseArray: " + responseArray);
                     return;
                 }
                 JsonObject contentTwoObject = new JsonParser().parse(contentTwo).getAsJsonObject();
@@ -128,10 +130,10 @@ public class KahootClient implements Runnable {
                     game.nemesis = nemesis.has("name") && !nemesis.get("name").isJsonNull() ? nemesis.get("name").getAsString() : "no one";
                 }
                 if (isDebug()) {
-                    System.out.println(correct ? "Correct!" : "Incorrect.");
-                    System.out.println("You got " + game.lastScore + " points from that question");
-                    System.out.println("You currently have " + game.totalScore + " points");
-                    System.out.println("You are in rank " + game.currentRank + ", behind " + game.nemesis);
+                    log(correct ? "Correct!" : "Incorrect.");
+                    log("You got " + game.lastScore + " points from that question");
+                    log("You currently have " + game.totalScore + " points");
+                    log("You are in rank " + game.currentRank + ", behind " + game.nemesis);
                 }
             } else if (responseString.contains("quizId")) {
                 JsonObject data = dataObject.get("data").getAsJsonObject();
@@ -139,8 +141,8 @@ public class KahootClient implements Runnable {
                 String quizId = content.get("quizId").getAsString();
                 int playerCount = content.get("playerCount").getAsInt();
                 if (isDebug()) {
-                    System.out.println("This quiz's ID is " + quizId);
-                    System.out.println("Players in game: " + playerCount);
+                    log("This quiz's ID is " + quizId);
+                    log("Players in game: " + playerCount);
                 }
                 game.active = false;
             }
@@ -191,26 +193,26 @@ public class KahootClient implements Runnable {
 
         //String data = "{\"id\": 6, \"type\": \"message\", \"gameid\": " + gameid + ", \"host\": \"kahoot.it\", \"content\": \"" + content + "\", \"channel\": \"/service/controller\", \"connectionType\", \"long-polling\", \"clientId\", \"" + client_id + "\"}";
 
-        //System.out.println(base.toString());
+        //log(base.toString());
         Headers headers = new Headers.Builder().add("Cookie", bayeuxCookie).build();
         Call call = HTTPUtils.POST(URL_BASE + game.gamepin + "/" + sessionToken, base.toString(), headers);
         Response response = call.execute();
         String responseString = response.body().string();
         if (KahootClient.isDebug())
-            System.out.println("AQ = " + responseString);
+            log("AQ = " + responseString);
         JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
         JsonObject r = r2.get(r2.size() - 1).getAsJsonObject();
         boolean success = r.get("successful").getAsBoolean();
         if (!success) {
-            System.out.println("[QUESTION/ANSWER] Error connecting to server! Full server response below.");
-            System.out.println(responseString);
+            log("[QUESTION/ANSWER] Error connecting to server! Full server response below.");
+            log(responseString);
         }
         game.questionAnswered = true;
     }
 
     public void disconnect() throws IOException {
         if (!isGameRunning()) {
-            System.out.println("Attempted to disconnect when client not active!");
+            log("Attempted to disconnect when client not active!");
             return;
         }
 
@@ -223,13 +225,13 @@ public class KahootClient implements Runnable {
         Response response = call.execute();
         String responseString = response.body().string();
         if (KahootClient.isDebug())
-            System.out.println("D = " + responseString);
+            log("D = " + responseString);
         JsonArray responseArray = new JsonParser().parse(responseString).getAsJsonArray();
         JsonObject responseObject = responseArray.get(0).getAsJsonObject();
         boolean success = responseObject.has("successful") && responseObject.get("successful").getAsBoolean();
         if (!success) {
-            System.out.println("[DISCONNECT] Error connecting to server! Full server response below.");
-            System.out.println(responseString);
+            log("[DISCONNECT] Error connecting to server! Full server response below.");
+            log(responseString);
         }
 
         game.active = false;
@@ -257,13 +259,13 @@ public class KahootClient implements Runnable {
             Response response = call.execute();
             String responseString = response.body().string();
             if (KahootClient.isDebug())
-                System.out.println("L1 = " + responseString);
+                log("L1 = " + responseString);
             JsonArray responseArray = new JsonParser().parse(responseString).getAsJsonArray();
             JsonObject responseObject = responseArray.get(responseArray.size() - 1).getAsJsonObject();
             boolean success = responseObject.get("successful").getAsBoolean();
             if (!success) {
-                System.out.println("[LOGIN/BEGIN] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+                log("[LOGIN/BEGIN] Error connecting to server! Full server response below.");
+                log(responseString);
             }
         }
 
@@ -279,13 +281,13 @@ public class KahootClient implements Runnable {
             Response response = HTTPUtils.POST_RESPONSE(URL_BASE + game.gamepin + "/" + sessionToken + "/connect", headersData, headers);
             String responseString = response.body().string();
             if (KahootClient.isDebug())
-                System.out.println("L2 = " + responseString);
+                log("L2 = " + responseString);
             JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
             JsonObject r = r2.get(r2.size() - 1).getAsJsonObject();
             boolean success = r.get("successful").getAsBoolean();
             if (!success) {
-                System.out.println("[LOGIN/FINISH] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+                log("[LOGIN/FINISH] Error connecting to server! Full server response below.");
+                log(responseString);
             }
         }
 
@@ -299,8 +301,8 @@ public class KahootClient implements Runnable {
         game.team = SessionUtils.getLastGameTeam();
 
         if (KahootClient.isDebug()) {
-            System.out.println("stoken = " + sessionToken);
-            System.out.println("gameid = " + game.gamepin);
+            log("stoken = " + sessionToken);
+            log("gameid = " + game.gamepin);
         }
 
         // Stage ONE
@@ -333,14 +335,14 @@ public class KahootClient implements Runnable {
                 }
             }
             if (KahootClient.isDebug())
-                System.out.println("1 = " + responseString);
+                log("1 = " + responseString);
 
             try {
                 JsonArray responseJson = new JsonParser().parse(responseString).getAsJsonArray();
                 JsonObject responseObject = responseJson.get(0).getAsJsonObject();
                 clientId = responseObject.get("clientId").getAsString();
             } catch (Exception e) {
-                System.out.println(responseString + "\n" + e.toString());
+                log(responseString + "\n" + e.toString());
                 return;
             }
         }
@@ -357,14 +359,14 @@ public class KahootClient implements Runnable {
             Response response = call.execute();
             String responseString = response.body().string();
             if (KahootClient.isDebug())
-                System.out.println("stage 2 = " + response);
+                log("stage 2 = " + response);
 
             JsonArray responseArray = new JsonParser().parse(responseString).getAsJsonArray();
             JsonObject responseObject = responseArray.get(0).getAsJsonObject();
             boolean success = responseObject.get("successful").getAsBoolean();
             if (!success) {
-                System.out.println("[STAGE 2] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+                log("[STAGE 2] Error connecting to server! Full server response below.");
+                log(responseString);
             }
 
         }
@@ -381,13 +383,13 @@ public class KahootClient implements Runnable {
             Response response = call.execute();
             String responseString = response.body().string();
             if (KahootClient.isDebug())
-                System.out.println("3 = " + responseString);
+                log("3 = " + responseString);
             JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
             JsonObject r = r2.get(0).getAsJsonObject();
             boolean success = r.get("successful").getAsBoolean();
             if (!success) {
-                System.out.println("[STAGE 3] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+                log("[STAGE 3] Error connecting to server! Full server response below.");
+                log(responseString);
             }
         }
 
@@ -404,13 +406,13 @@ public class KahootClient implements Runnable {
             Response response = call.execute();
             String responseString = response.body().string();
             if (KahootClient.isDebug())
-                System.out.println("4-1 = " + responseString);
+                log("4-1 = " + responseString);
             JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
             JsonObject r = r2.get(0).getAsJsonObject();
             boolean success = r.get("successful").getAsBoolean();
             if (!success) {
-                System.out.println("[STAGE 4/SERVICE_STATUS] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+                log("[STAGE 4/SERVICE_STATUS] Error connecting to server! Full server response below.");
+                log(responseString);
             }
         }
 
@@ -426,13 +428,13 @@ public class KahootClient implements Runnable {
             Response response = HTTPUtils.POST_RESPONSE(URL_BASE + game.gamepin + "/" + sessionToken, c7.toString(), headers);
             String responseString = response.body().string();
             if (KahootClient.isDebug())
-                System.out.println("4-2 = " + responseString);
+                log("4-2 = " + responseString);
             JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
             JsonObject r = r2.get(0).getAsJsonObject();
             boolean success = r.get("successful").getAsBoolean();
             if (!success) {
-                System.out.println("[STAGE 4/SERVICE_PLAYER] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+                log("[STAGE 4/SERVICE_PLAYER] Error connecting to server! Full server response below.");
+                log(responseString);
             }
         }
 
@@ -449,13 +451,13 @@ public class KahootClient implements Runnable {
             Response response = call.execute();
             String responseString = response.body().string();
             if (KahootClient.isDebug())
-                System.out.println("4-3 = " + responseString);
+                log("4-3 = " + responseString);
             JsonArray r2 = new JsonParser().parse(responseString).getAsJsonArray();
             JsonObject r = r2.get(0).getAsJsonObject();
             boolean success = r.get("successful").getAsBoolean();
             if (!success) {
-                System.out.println("[STAGE 4/SERVICE_CONTROLLER] Error connecting to server! Full server response below.");
-                System.out.println(responseString);
+                log("[STAGE 4/SERVICE_CONTROLLER] Error connecting to server! Full server response below.");
+                log(responseString);
             }
         }
     }
@@ -553,7 +555,7 @@ public class KahootClient implements Runnable {
 
     public boolean setGame(int gamepin) {
         if (game != null && game.active) {
-            System.out.println("Cannot update gamepin when game is active!");
+            log("Cannot update gamepin when game is active!");
             return false;
         }
 
@@ -576,6 +578,14 @@ public class KahootClient implements Runnable {
                 ", clientId='" + clientId + '\'' +
                 ", game=" + game +
                 '}';
+    }
+
+    public static void setLogger(ILogger logger) {
+        KahootClient.logger = logger;
+    }
+
+    public static void log(String message) {
+        if (logger != null) logger.log(message);
     }
 
 }
