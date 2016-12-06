@@ -31,7 +31,7 @@ public class SessionUtils {
     }
 
     private static String solveChallenge(String challenge) throws IOException {
-        String urlEncodedChallenge = URLEncoder.encode(challenge, "UTF-8").replace("*", "%2A");
+        String urlEncodedChallenge = URLEncoder.encode(challenge, "UTF-8").replace("*", "%2A").replace("console.log(\\\"Offset derived as:\\\", offset);", "");
         Call call = HTTPUtils.GET("http://safeval.pw/eval?code=" + urlEncodedChallenge);
         Response response = call.execute();
         String string = response.body().string();
