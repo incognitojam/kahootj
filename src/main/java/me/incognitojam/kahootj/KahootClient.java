@@ -94,11 +94,6 @@ public class KahootClient implements Runnable {
                 game.previousAnswer = ans;
                 int ra = answers.get(Integer.toString(ans)).getAsInt();
                 KahootClient.this.answerQuestion(ra);
-//                System.out.print("Answer: ");
-//                int ans = userInput.nextInt();
-//                previousAnswer = ans;
-//                int ra = answers.getInt(Integer.toString(ans));
-//                Kahoot.this.answerQuestion(ra);
             } else if (responseString.contains("answerMap")) {
 //                System.out.println("Get ready, question is coming up!");
             }
@@ -107,7 +102,9 @@ public class KahootClient implements Runnable {
                 JsonObject data = dataObject.get("data").getAsJsonObject();
                 JsonObject content = new JsonParser().parse(data.get("content").getAsString().replace("\\", "")).getAsJsonObject();
                 String primaryMessage = content.get("primaryMessage").getAsString();
-//                System.out.println("PRIMARY MESSAGE: " + primaryMessage);
+                if (isDebug()) {
+                    System.out.println("PRIMARY MESSAGE: " + primaryMessage);
+                }
             } else if (responseString.contains("isCorrect")) {
                 JsonObject dataTwo = responseArray.get(responseArray.get(0).toString().contains("isCorrect") ? 0 : 1).getAsJsonObject();
                 String contentTwo;
@@ -130,17 +127,21 @@ public class KahootClient implements Runnable {
                     JsonObject nemesis = contentTwoObject.get("nemesis").getAsJsonObject();
                     game.nemesis = nemesis.has("name") && !nemesis.get("name").isJsonNull() ? nemesis.get("name").getAsString() : "no one";
                 }
-//                System.out.println(correct ? "Correct!" : "Incorrect.");
-//                System.out.println("You got " + game.lastScore + " points from that question");
-//                System.out.println("You currently have " + game.totalScore + " points");
-//                System.out.println("You are in rank " + game.currentRank + ", behind " + game.nemesis);
+                if (isDebug()) {
+                    System.out.println(correct ? "Correct!" : "Incorrect.");
+                    System.out.println("You got " + game.lastScore + " points from that question");
+                    System.out.println("You currently have " + game.totalScore + " points");
+                    System.out.println("You are in rank " + game.currentRank + ", behind " + game.nemesis);
+                }
             } else if (responseString.contains("quizId")) {
                 JsonObject data = dataObject.get("data").getAsJsonObject();
                 JsonObject content = new JsonParser().parse(data.get("content").getAsString().replace("\\", "")).getAsJsonObject();
                 String quizId = content.get("quizId").getAsString();
                 int playerCount = content.get("playerCount").getAsInt();
-//                System.out.println("This quiz's ID is " + quizId);
-//                System.out.println("Players in game: " + playerCount);
+                if (isDebug()) {
+                    System.out.println("This quiz's ID is " + quizId);
+                    System.out.println("Players in game: " + playerCount);
+                }
                 game.active = false;
             }
 
