@@ -8,9 +8,13 @@ import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.Response;
 
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 
 public class SessionUtils {
 
@@ -30,33 +34,64 @@ public class SessionUtils {
         return wasLastGameTeam;
     }
 
-    private static String solveChallenge(String challenge) throws IOException {
-        String urlEncodedChallenge = URLEncoder.encode(challenge, "UTF-8").replace("*", "%2A").replace("console.log(\\\"Offset derived as:\\\", offset);", "");
-        if (KahootClient.isDebug()) {
-            KahootClient.log("urlEncoded challenge: " + urlEncodedChallenge);
+    private static String solveChallenge(String challenge) {
+        ScriptEngineManager manager = new ScriptEngineManager();
+        ScriptEngine engine = manager.getEngineByName("js");
+
+        System.out.println("Challenge: " + challenge);
+
+        String message;
+        double offset;
+
+        {
+            int firstIndex = challenge.indexOf("'");
+            int lastIndex = challenge.lastIndexOf("'");
+            message = challenge.substring(firstIndex + 1, lastIndex);
+
+            System.out.println("Message: " + message);
         }
-        Call call = HTTPUtils.GET("http://safeval.pw/eval?code=" + urlEncodedChallenge);
-        Response response = call.execute();
-        String string = response.body().string();
-        if (KahootClient.isDebug()) {
-            KahootClient.log("Solve challenge: " + string);
+
+        {
+            int firstIndex = challenge.indexOf("=");
+            int lastIndex = challenge.indexOf(";", firstIndex);
+            String offsetCalculation = challenge.substring(firstIndex + 1, lastIndex);
+            try {
+                offset = Double.valueOf(engine.eval(offsetCalculation).toString());
+            } catch (ScriptException e) {
+                e.printStackTrace();
+                offset = 0;
+            }
+
+            System.out.println("Offset: " + offset);
         }
-        response.close();
-        return string;
+
+        int length = message.length();
+        char[] array = new char[length];
+
+        for (int position = 0; position < length; position++) {
+            char c = message.charAt(position);
+            char c2 = (char) ((((c * position) + offset) % 77) + 48);
+            array[position] = c2;
+        }
+
+        String decoded = new String(array);
+        System.out.println("Decoded message: " + decoded);
+
+        return decoded;
     }
 
     /**
      * Check if a game PIN is valid.
      *
-     * @param gamepin The game PIN to check
+     * @param gamePin The game PIN to check
      * @return true if game PIN is valid, false if game PIN is invalid or an exception was thrown.
      */
-    public static boolean checkPINValidity(int gamepin) throws IOException {
-        return isResponseValid(HTTPUtils.GET_RESPONSE("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis()));
+    public static boolean checkPINValidity(int gamePin) {
+        return isResponseValid(HTTPUtils.GET_RESPONSE("https://kahoot.it/reserve/session/" + gamePin + "/?" + System.currentTimeMillis()));
     }
 
-    public static void checkPINValidity(int gamepin, SessionCallback<Boolean> callback) {
-        Call call = HTTPUtils.GET("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
+    public static void checkPINValidity(int gamePin, SessionCallback<Boolean> callback) {
+        Call call = HTTPUtils.GET("https://kahoot.it/reserve/session/" + gamePin + "/?" + System.currentTimeMillis());
         call.enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -64,7 +99,7 @@ public class SessionUtils {
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(Call call, Response response) {
                 callback.onSuccess(isResponseValid(response));
             }
         });
@@ -95,11 +130,11 @@ public class SessionUtils {
      * Note that this function doesn't return the session token in a usable state.<br>
      * The session token must be decoded using decodeSessionToken() before it can be used.
      *
-     * @param gamepin The game PIN to retrieve a session token for
+     * @param gamePin The game PIN to retrieve a session token for
      * @return The encoded session token
      */
-    public static String getSessionToken(int gamepin) throws IOException {
-        Response response = HTTPUtils.GET_RESPONSE("https://kahoot.it/reserve/session/" + gamepin + "/?" + System.currentTimeMillis());
+    public static String getSessionToken(int gamePin) throws IOException {
+        Response response = HTTPUtils.GET_RESPONSE("https://kahoot.it/reserve/session/" + gamePin + "/?" + System.currentTimeMillis());
         if (response == null) {
             System.out.println("Response is null");
             return null;

@@ -15,8 +15,8 @@ public class Game {
     public boolean optionFourValid; // Was 4 a valid answer on the last question?
     public boolean team; // Is this a team game or classic PvP?
 
-    public Game(int gamepin) {
-        this.gamepin = gamepin;
+    public Game(int gamePin) {
+        this.gamepin = gamePin;
     }
 
     @Override

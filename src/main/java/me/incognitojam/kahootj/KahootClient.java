@@ -15,6 +15,7 @@ import okhttp3.Response;
 import java.io.IOException;
 
 public class KahootClient implements Runnable {
+
     private static final String URL_BASE = "https://kahoot.it/cometd/";
     private static boolean debugMode = false;
     private static ILogger logger;

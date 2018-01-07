@@ -14,13 +14,13 @@ public class FloodApp {
 
     private static final int BOTS_PER_SECOND = 30;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         System.out.print("Enter Game PIN: ");
         final Scanner userInput = new Scanner(System.in);
-        final int gamepin = userInput.nextInt();
+        final int gamePin = userInput.nextInt();
         userInput.nextLine(); // There is a newline character submitted with the int
         System.out.print("Checking game PIN validity... ");
-        if (SessionUtils.checkPINValidity(gamepin)) {
+        if (SessionUtils.checkPINValidity(gamePin)) {
             System.out.println("valid game PIN!");
         } else {
             System.out.println("invalid game PIN! Exiting.");
@@ -45,7 +45,7 @@ public class FloodApp {
             KahootClient bot = new KahootClient(base + i, actionProvider);
             bots[i] = bot;
 
-            bot.setGame(gamepin);
+            bot.setGame(gamePin);
             executor.submit(bot);
 
             System.out.print("Connecting Kahoot bots: " + (i + 1) + " / " + bots.length + "\r");
